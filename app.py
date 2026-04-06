@@ -49,11 +49,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🔑 認証システム")
     
-    # ==========================================
-    # 【追加】Proプランへの誘導と警告メッセージ
-    # ==========================================
     st.info("💡 **Proプラン (月額980円)**\n\n最上位AIモデル「Gemini Pro」による高度な論文解析・完全再現模試が使い放題になります。")
-    # ※後でここのURLを、Stripe等で作成した実際の決済用リンクに書き換えてください
     purchase_url = "https://buy.stripe.com/test_xxxxxx"
     st.markdown(f"<a href='{purchase_url}' target='_blank'><button style='width:100%; border-radius:4px; background-color:#FF4B4B; color:white; border:none; padding:10px; font-weight:bold; cursor:pointer;'>💎 Proプランに登録する</button></a>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 11px; color: gray; text-align: center; margin-top: 5px;'>※パスワードの第三者への共有は利用規約違反となり、検知次第パスワードを無効化します。</p>", unsafe_allow_html=True)
@@ -63,13 +59,10 @@ with st.sidebar:
     
     user_pass = st.text_input("💎 Pro Pass (登録者専用)", type="password")
     
-    # ==========================================
-    # 【追加】複数の有効なパスワードをリスト化（毎月ここを更新する）
-    # ==========================================
     valid_passes = [
-        "admin",               # 開発者（あなた）用の永続パスワード
-        "pro_2024_03_secure",  # 3月用のパスワード（例）
-        "test_pass_980"        # テスト・特定ユーザー用のパスワード
+        "admin",               
+        "pro_2024_03_secure",  
+        "test_pass_980"        
     ]
     
     if user_pass in valid_passes:
@@ -176,7 +169,16 @@ elif active_api_key:
                 if st.button("📝 解析を実行", key="btn_sum"):
                     with st.spinner("解析を実行中..."):
                         txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
-                        res = generate_content_with_retry(selected_model_name, None, f"{t['ai_instruction']}\n以下の資料を「{mode}」の形式で要約・整理してください。\n\n資料:\n{txt}")
+                        prompt_sum = f"""{t['ai_instruction']}
+以下の資料を「{mode}」の形式で要約・整理してください。
+
+【絶対厳守ルール】
+1. 「料理のレシピ」等の無関係な言葉や、AIの自己紹介、前置きの挨拶は一切出力しないこと。
+2. 指定された「{mode}」の形式に則った学術的な分析結果のみを直接出力すること。
+
+資料:
+{txt}"""
+                        res = generate_content_with_retry(selected_model_name, None, prompt_sum)
                         st.markdown(res); add_to_history(f"要約({mode})", res)
             with rtab2:
                 if u_img:
@@ -277,7 +279,6 @@ elif active_api_key:
             "🔄 完全再現模試 (β)"      
         ])
         
-        # 【429対策】送信するテキスト量を20,000文字でカット
         material_payload = []
         if st.session_state.pdf_texts:
             combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
@@ -414,3 +415,4 @@ elif active_api_key:
 
 else:
     st.warning("👈 サイドバーで設定を完了してください。")
+    
