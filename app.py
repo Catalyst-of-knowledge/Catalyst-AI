@@ -165,23 +165,23 @@ elif active_api_key:
         else:
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 比較・要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
-                mode = st.radio(t["prompt_summary_mode"], t["modes"], horizontal=True)
+                # 【変更】「初学者解説」モードをリストから除外して表示する
+                available_modes = [m for m in t["modes"] if "初学者" not in m]
+                mode = st.radio(t["prompt_summary_mode"], available_modes, horizontal=True)
+                
                 if st.button("📝 解析を実行", key="btn_sum"):
                     with st.spinner("解析を実行中..."):
                         txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
                         
-                        # ==========================================
-                        # 【完全改訂】モードに応じた「深掘り強制フォーマット」の分岐
-                        # ==========================================
                         if "IMRAD" in mode or "IMRAD" in mode.upper():
                             specific_instruction = """
-以下の資料を【IMRAD形式】で、専門家が読んでも納得するレベルで極めて詳細に構造化し、深掘りして解析・要約してください。
-単なる表面的な要約ではなく、具体的な「数値」「実験条件」「論理展開」を必ず含めること。
+以下の資料【全体】を一つの研究論文として捉え、【IMRAD形式】で専門家レベルの構造化要約を作成してください。
+単なる表面的な要約ではなく、全体を通した具体的な「数値」「実験条件」「論理展開」を必ず抽出すること。
 
 【出力フォーマット】
 ## 📌 I (Introduction: 導入・背景)
 - 研究の背景とこれまでの課題
-- この資料の具体的な目的と検証したい仮説
+- この資料全体の目的と検証したい仮説
 
 ## 🔬 M (Methods: 方法)
 - 対象・サンプル・使用機器（具体的な条件、サンプル数などを明記）
@@ -193,7 +193,7 @@ elif active_api_key:
 
 ## 🧠 D (Discussion: 考察・結論)
 - 結果から導き出される論理的な結論とメカニズム
-- この研究の限界点（Limitation）や今後の課題・展望
+- この研究全体の限界点（Limitation）や今後の課題・展望
 """
                         elif "一般" in mode or "General" in mode:
                             specific_instruction = """
@@ -215,14 +215,15 @@ elif active_api_key:
 - (資料から読み取れる制約や、次に繋がる課題)
 """
                         else:
-                            specific_instruction = f"以下の資料を「{mode}」の形式で極めて具体的に要約・整理してください。"
+                            specific_instruction = f"以下の資料全体を「{mode}」の形式で極めて具体的に要約・整理してください。"
 
                         prompt_sum = f"""{t['ai_instruction']}
 {specific_instruction}
 
 【絶対厳守ルール】
 1. 「料理のレシピ」等の無関係な言葉や、AIの自己紹介、前置きの挨拶は一切出力しないこと。
-2. 指定されたフォーマットに則り、学術的かつプロフェッショナルな分析結果のみを直接出力すること。
+2. 資料のテキストには「【ページ X】」という表記が含まれていますが、**ページごとに分割して同じような要約を何度も繰り返す（ループする）ことは「重大なシステムエラー」とみなし絶対に禁止**します。必ず「資料全体で1つの統合された要約」を作成してください。
+3. 指定されたフォーマットに則り、学術的かつプロフェッショナルな分析結果のみを直接出力すること。
 
 資料:
 {txt}"""
