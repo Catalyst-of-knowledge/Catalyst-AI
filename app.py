@@ -165,7 +165,6 @@ elif active_api_key:
         else:
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 比較・要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
-                # 【変更】「初学者」と「重要ポイント」をリストから除外し、2つのモードに絞り込む
                 available_modes = [m for m in t["modes"] if "初学者" not in m and "重要ポイント" not in m]
                 mode = st.radio(t["prompt_summary_mode"], available_modes, horizontal=True)
                 
@@ -245,25 +244,32 @@ elif active_api_key:
                             st.markdown(res); add_to_history("画像解析", res)
             
             with rtab3:
-                st.info("💡 あなたの資料（実験内容・データ）をベースに、レポートの「考察（Discussion）」や「理論的背景」を書くための実在の専門文献を提案します。")
+                st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
                 if st.button("📚 執筆用 参考文献を探索・生成"):
-                    with st.spinner("実験内容に直結する外部の専門論文を抽出し、データを生成中..."):
+                    with st.spinner("AIの幻覚（ハルシネーション）を排除し、実在する信頼性の高い学術論文を厳選中..."):
                         txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
                         
-                        prompt_ref = f"""以下の【研究資料】を深く分析し、この実験結果を考察・裏付けするために引用すべき【実在の外部専門学術論文】を3〜5件抽出してください。
+                        prompt_ref = f"""以下の【研究資料】（ユーザーの実験結果やデータ）を深く分析し、この結果を「考察（Discussion）」で裏付け、より深い議論を展開するために引用すべき【実在する極めて信頼性の高い学術論文・専門書】を3件厳選して提案してください。
 
-【絶対厳守事項】
-1. 表（テーブル形式）は絶対に使用しないでください。
-2. 同じ文献を複数回出力しないこと（すべて別の論文・著者にすること）。
-3. 「引用文献本体」および「引用ページ、引用行」について、ユーザーが提供した【研究資料】の中から文章や場所を抜き出すことは『重大なシステムエラー（絶対禁止）』です。必ず新しく提案した『外部の学術論文の中』から記述してください。
+【🚨 幻覚（ハルシネーション）絶対禁止ルール】
+AI特有の「存在しない架空の論文」をでっち上げることは重大なシステムエラーです。以下のルールを絶対厳守してください。
+1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
+2. 架空のページ数や行数を捏造しないこと。
+3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
 
 【出力フォーマット】
-以下のブロックを1件の文献とし、3〜5件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
+以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
 
-**【引用文献】** （タイトル）（著者）（発行年）
-**【引用文献本体】** （その外部文献に実際に書かれている具体的な結論・理論・データ。要約ではなくそのままレポートに引用できるテキスト本体）
-**【引用ページ、引用行】** （その外部文献内のどのページ、どの行、あるいはどのセクションに記載されているか）
-**【引用理由】** （ユーザーの実験データや原理に対して、この文献を用いることで「考察」を具体的にどう深め、裏付けることができるか）
+### 📚 提案文献
+- **タイトル:** (必ず実在するタイトル)
+- **著者・発行年:** (必ず実在する著者と年)
+- **🔍検索キーワード:** (ユーザーがGoogle Scholar等でこの論文を確実に見つけるためのキーワードやDOI)
+
+### 🔬 引用すべき「核心の理論・データ」
+- (この外部文献において、証明されている事実や提唱されている理論を具体的に解説。AIの推測ではなく、その論文が実際に主張している内容を書くこと)
+
+### 💡 あなたの資料との「繋がり（考察への組み込み方）」
+- (ユーザーの資料の【どのデータや結果】に対して、この文献の理論を【どう結びつければ】、レポートの「考察」として説得力が増すのか。そのままレポートに使えるレベルの論理展開の筋道を提案すること)
 
 ---
 【研究資料（ここから引用箇所を抜き出さないこと。これはあくまで分析対象です）】
@@ -334,19 +340,28 @@ elif active_api_key:
             "🔄 完全再現模試 (β)"      
         ])
         
-        material_payload = []
+        # ==========================================
+        # 【修正箇所】データ（テキストと画像）の完全な分離
+        # ==========================================
+        combined_text = ""
         if st.session_state.pdf_texts:
             combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
-            material_payload.append(combined_text)
+            
+        image_payload = []
         if st.session_state.pdf_images:
             for imgs in st.session_state.pdf_images.values():
-                material_payload.extend(imgs)
+                image_payload.extend(imgs)
         if u_img:
             img = Image.open(u_img)
             img.thumbnail((1024, 1024))
-            material_payload.append(img)
+            image_payload.append(img)
             
-        is_material_loaded = len(material_payload) > 0
+        is_material_loaded = bool(combined_text) or len(image_payload) > 0
+
+        # ExamEngine用のペイロード（ここではテキストも画像も許容）
+        material_payload = []
+        if combined_text: material_payload.append(combined_text)
+        material_payload.extend(image_payload)
 
         with tab1:
             ca, cb = st.columns(2)
@@ -360,33 +375,40 @@ elif active_api_key:
                     st.error("❌ 上部のエリアから画像資料またはPDFをアップロードしてください。")
                 else:
                     with st.spinner("資料から高品質な問題を生成中..."):
-                        payload_q = list(material_payload) 
-                        
+                        # プロンプト内にテキストデータを直接埋め込む（エラー回避のため）
                         prompt_q = f"""対象レベル「{t_level}」のプロの試験作成者として、添付資料から完全に新しいオリジナルの問題を作成せよ。難易度: {diff}、形式: {t_type}。
+
+【参考資料テキスト】
+{combined_text}
+
 【絶対厳守ルール】
 1. 問題編のテキストのみを出力すること。プログラムコードブロックは使用禁止。
 2. 「問題に誤りがある可能性」「必ずしも成立しない」等のAI特有のメタ発言や逃げ口上は絶対禁止。必ず論理的に解ける完全な問題を作成すること。
 3. 指定された【対象レベル】の学習指導要領の範囲を厳守すること。arccos, arcsin等の逸脱した大学数学の範囲は絶対に使用しないこと。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^` や `*` などのプレーンテキスト表記は禁止。"""
-                        payload_q.append(prompt_q)
-                        res_q = generate_content_with_retry(selected_model_name, payload_q, prompt_q)
+                        
+                        # 関数には画像リスト（image_payload）のみを渡す
+                        res_q = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_q)
                         res_q_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_q).strip()
                         
                     if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
                         with st.spinner("問題に対する『解答・解説』を生成中..."):
-                            payload_a = payload_q[:-1]
-                            
                             prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
+
 【作成された問題】
 {res_q_clean}
+
+【参考資料テキスト】
+{combined_text}
 
 【絶対厳守ルール】
 1. プログラムコードブロック使用禁止。
 2. 「問題に誤りがある」「解けない可能性がある」といった逃げ口上は絶対禁止。必ず断定的なトーンで正解を導き出すこと。
 3. 指定された【対象レベル】の教育課程の範囲内で解説すること（逸脱した知識・逆三角関数等の使用は禁止）。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^`や`*`のプレーンテキスト表記は厳禁。"""
-                            payload_a.append(prompt_a)
-                            res_a = generate_content_with_retry(selected_model_name, payload_a, prompt_a)
+                            
+                            # こちらも関数には画像リストのみ渡す
+                            res_a = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_a)
                             res_a_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_a).strip()
                             
                         st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
@@ -409,8 +431,7 @@ elif active_api_key:
                             ans_img.thumbnail((1024, 1024))
                             p_load.append(ans_img)
                         p = f"問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
-                        p_load.append(p)
-                        st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load, p)
+                        st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
                         add_to_history("テスト採点", st.session_state.solve_feedback)
                 if st.session_state.solve_feedback: 
                     st.success("📊 添削・採点結果")
