@@ -164,66 +164,76 @@ elif active_api_key:
             st.warning("👆 上のエリアから資料をアップロードしてください。")
         else:
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 比較・要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
-            
-            # 【外科的修正箇所】ここから: 要約のプロンプトを安定稼働するクリーンな形に復元しました。
             with rtab1:
+                # 【変更】「初学者」と「重要ポイント」をリストから除外し、2つのモードに絞り込む
                 available_modes = [m for m in t["modes"] if "初学者" not in m and "重要ポイント" not in m]
                 mode = st.radio(t["prompt_summary_mode"], available_modes, horizontal=True)
                 
                 if st.button("📝 解析を実行", key="btn_sum"):
-                    with st.spinner("資料を解析・構造化しています..."):
+                    with st.spinner("圧倒的な情報量と分かりやすさで解析中... (数十秒かかる場合があります)"):
                         txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
                         
                         if "IMRAD" in mode or "IMRAD" in mode.upper():
                             specific_instruction = """
-以下の資料全体を【IMRAD形式】で構造化し、専門的かつ詳細な要約を作成してください。
+以下の資料【全体】を一つの研究論文として捉え、【IMRAD形式】で専門家レベルの構造化要約を作成してください。
+単なる表面的な要約ではなく、全体を通した具体的な「数値」「実験条件」「論理展開」を必ず抽出し、**読者がこの要約だけで原著論文を完全に理解できるレベルの「圧倒的な情報量（ボリューム）」と「分かりやすさ」**を両立させてください。
 
 【出力フォーマット】
 ## 📌 I (Introduction: 導入・背景)
-- 研究の背景、目的、および検証したい仮説を具体的に記載してください。
+- 研究の背景とこれまでの課題（なぜこの研究が必要だったのか、背景を詳しく解説）
+- この資料全体の目的と検証したい仮説
 
 ## 🔬 M (Methods: 方法)
-- 対象サンプル、使用機器、実験・調査の具体的な手順を記載してください。
+- 対象・サンプル・使用機器（具体的な条件、サンプル数などを明記）
+- 実験・調査・分析の具体的な手順（ステップバイステップで詳細に）
 
 ## 📊 R (Results: 結果)
-- 得られた主要なデータ、具体的な数値、有意差などの客観的事実を箇条書きで詳細に抽出してください。
+【重要: 最も詳細に記述するセクションです。圧倒的なボリュームで抽出してください】
+- 得られたすべての主要なデータ・発見（箇条書きで具体的に列挙）
+- 重要な「具体的な数値」「パーセンテージ」「倍率」「統計的有意差（p値など）」を必ず明記
+- 比較結果（対照群との違い、条件AとBの差など）を明確に記述
+- データの具体的な傾向や、もしあれば例外的な結果
 
 ## 🧠 D (Discussion: 考察・結論)
-- 結果から導き出される結論、メカニズム、限界点（Limitation）、今後の課題を記載してください。
+- 結果から導き出される論理的な結論とメカニズム（なぜその結果になったのか、論理のプロセスを分かりやすく解説）
+- この研究全体の限界点（Limitation）や今後の課題・展望
 """
                         elif "一般" in mode or "General" in mode:
                             specific_instruction = """
-以下の資料の「核心となる情報」を抽出し、論理的かつ具体的に要約してください。
+以下の資料の「核心となる情報」を抽出し、極めて具体的かつ詳細に深掘りして要約してください。
+抽象的な表現（例：「〜について述べられている」「〜が調査された」）は絶対に避け、実際に「何が分かり」「どういうデータが出たのか」を明記すること。
+また、**読者がこの要約を読むだけで資料の全貌を完全に理解できるレベルの「圧倒的な情報量（ボリューム）」と「分かりやすさ」**を持たせてください。
 
 【出力フォーマット】
-## 🎯 資料の核心・結論
-- (この資料が最も主張したい結論を端的に記載)
+## 🎯 資料の核心・結論（一言で言うと何か）
+- (資料が最も主張したい結論を具体的に、かつ分かりやすく)
 
-## 💡 主要なポイントとデータ
-- (具体的な事実や数値に基づく発見を箇条書きで明確に記載)
+## 💡 主要な発見と詳細なデータ（重要度の高い順に、ボリュームを持たせて）
+- (具体的な数値や事実に基づく発見を深掘りして、多数の箇条書きで列挙)
+- (抽象的な言葉を避け、事実と結果を詳細に記載)
 
-## ⚙️ アプローチ・根拠
-- (どのような手法・データに基づいてその結論に至ったかを解説)
+## ⚙️ 採用されたアプローチ・根拠
+- (どのような手法・データに基づいてその結論に至ったか、論理のプロセスを詳しく解説)
 
-## ⚠️ 留意点・今後の展望
+## ⚠️ 留意点・限界・今後の展望
 - (資料から読み取れる制約や、次に繋がる課題)
 """
                         else:
-                            specific_instruction = f"以下の資料全体を「{mode}」の形式で詳細に要約・整理してください。"
+                            specific_instruction = f"以下の資料全体を「{mode}」の形式で極めて具体的かつ圧倒的なボリュームで要約・整理してください。"
 
                         prompt_sum = f"""{t['ai_instruction']}
 {specific_instruction}
 
 【絶対厳守ルール】
-1. 前置きの挨拶、AIの自己紹介、「料理のレシピ」等の無関係な比喩表現は一切出力しないこと。
-2. 資料に「【ページ X】」という表記があっても、ページごとに分割して同じ要約を繰り返す（ループ処理）ことは重大なエラーとみなします。必ず「資料全体で1つの統合された要約」を作成すること。
-3. 指定されたフォーマットのマークダウン（## など）に則り、学術的かつプロフェッショナルな出力のみを直接返すこと。
+1. 「料理のレシピ」等の無関係な言葉や、AIの自己紹介、前置きの挨拶は一切出力しないこと。
+2. 資料のテキストには「【ページ X】」という表記が含まれていますが、ページごとに分割して同じような要約を何度も繰り返す（ループする）ことは絶対に禁止します。必ず「資料全体で1つの統合された要約」を作成してください。
+3. 指定されたフォーマットに則り、学術的かつプロフェッショナルな分析結果のみを直接出力すること。
+4. 【重要】要約だからといって短く省略しないでください。重要なデータ、数値、論理展開はすべて残し、圧倒的なボリュームと分かりやすさを担保すること。
 
 資料:
 {txt}"""
                         res = generate_content_with_retry(selected_model_name, None, prompt_sum)
                         st.markdown(res); add_to_history(f"要約({mode})", res)
-            # 【外科的修正箇所】ここまで
             
             with rtab2:
                 if u_img:
@@ -235,32 +245,25 @@ elif active_api_key:
                             st.markdown(res); add_to_history("画像解析", res)
             
             with rtab3:
-                st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
+                st.info("💡 あなたの資料（実験内容・データ）をベースに、レポートの「考察（Discussion）」や「理論的背景」を書くための実在の専門文献を提案します。")
                 if st.button("📚 執筆用 参考文献を探索・生成"):
-                    with st.spinner("AIの幻覚（ハルシネーション）を排除し、実在する信頼性の高い学術論文を厳選中..."):
+                    with st.spinner("実験内容に直結する外部の専門論文を抽出し、データを生成中..."):
                         txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
                         
-                        prompt_ref = f"""以下の【研究資料】（ユーザーの実験結果やデータ）を深く分析し、この結果を「考察（Discussion）」で裏付け、より深い議論を展開するために引用すべき【実在する極めて信頼性の高い学術論文・専門書】を3件厳選して提案してください。
+                        prompt_ref = f"""以下の【研究資料】を深く分析し、この実験結果を考察・裏付けするために引用すべき【実在の外部専門学術論文】を3〜5件抽出してください。
 
-【🚨 幻覚（ハルシネーション）絶対禁止ルール】
-AI特有の「存在しない架空の論文」をでっち上げることは重大なシステムエラーです。以下のルールを絶対厳守してください。
-1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
-2. 架空のページ数や行数を捏造しないこと。
-3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
+【絶対厳守事項】
+1. 表（テーブル形式）は絶対に使用しないでください。
+2. 同じ文献を複数回出力しないこと（すべて別の論文・著者にすること）。
+3. 「引用文献本体」および「引用ページ、引用行」について、ユーザーが提供した【研究資料】の中から文章や場所を抜き出すことは『重大なシステムエラー（絶対禁止）』です。必ず新しく提案した『外部の学術論文の中』から記述してください。
 
 【出力フォーマット】
-以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
+以下のブロックを1件の文献とし、3〜5件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
 
-### 📚 提案文献
-- **タイトル:** (必ず実在するタイトル)
-- **著者・発行年:** (必ず実在する著者と年)
-- **🔍検索キーワード:** (ユーザーがGoogle Scholar等でこの論文を確実に見つけるためのキーワードやDOI)
-
-### 🔬 引用すべき「核心の理論・データ」
-- (この外部文献において、証明されている事実や提唱されている理論を具体的に解説。AIの推測ではなく、その論文が実際に主張している内容を書くこと)
-
-### 💡 あなたの資料との「繋がり（考察への組み込み方）」
-- (ユーザーの資料の【どのデータや結果】に対して、この文献の理論を【どう結びつければ】、レポートの「考察」として説得力が増すのか。そのままレポートに使えるレベルの論理展開の筋道を提案すること)
+**【引用文献】** （タイトル）（著者）（発行年）
+**【引用文献本体】** （その外部文献に実際に書かれている具体的な結論・理論・データ。要約ではなくそのままレポートに引用できるテキスト本体）
+**【引用ページ、引用行】** （その外部文献内のどのページ、どの行、あるいはどのセクションに記載されているか）
+**【引用理由】** （ユーザーの実験データや原理に対して、この文献を用いることで「考察」を具体的にどう深め、裏付けることができるか）
 
 ---
 【研究資料（ここから引用箇所を抜き出さないこと。これはあくまで分析対象です）】
@@ -331,24 +334,19 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
             "🔄 完全再現模試 (β)"      
         ])
         
-        combined_text = ""
+        material_payload = []
         if st.session_state.pdf_texts:
             combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
-            
-        image_payload = []
+            material_payload.append(combined_text)
         if st.session_state.pdf_images:
             for imgs in st.session_state.pdf_images.values():
-                image_payload.extend(imgs)
+                material_payload.extend(imgs)
         if u_img:
             img = Image.open(u_img)
             img.thumbnail((1024, 1024))
-            image_payload.append(img)
+            material_payload.append(img)
             
-        is_material_loaded = bool(combined_text) or len(image_payload) > 0
-
-        material_payload = []
-        if combined_text: material_payload.append(combined_text)
-        material_payload.extend(image_payload)
+        is_material_loaded = len(material_payload) > 0
 
         with tab1:
             ca, cb = st.columns(2)
@@ -362,37 +360,33 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                     st.error("❌ 上部のエリアから画像資料またはPDFをアップロードしてください。")
                 else:
                     with st.spinner("資料から高品質な問題を生成中..."):
+                        payload_q = list(material_payload) 
+                        
                         prompt_q = f"""対象レベル「{t_level}」のプロの試験作成者として、添付資料から完全に新しいオリジナルの問題を作成せよ。難易度: {diff}、形式: {t_type}。
-
-【参考資料テキスト】
-{combined_text}
-
 【絶対厳守ルール】
 1. 問題編のテキストのみを出力すること。プログラムコードブロックは使用禁止。
 2. 「問題に誤りがある可能性」「必ずしも成立しない」等のAI特有のメタ発言や逃げ口上は絶対禁止。必ず論理的に解ける完全な問題を作成すること。
 3. 指定された【対象レベル】の学習指導要領の範囲を厳守すること。arccos, arcsin等の逸脱した大学数学の範囲は絶対に使用しないこと。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^` や `*` などのプレーンテキスト表記は禁止。"""
-                        
-                        res_q = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_q)
+                        payload_q.append(prompt_q)
+                        res_q = generate_content_with_retry(selected_model_name, payload_q, prompt_q)
                         res_q_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_q).strip()
                         
                     if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
                         with st.spinner("問題に対する『解答・解説』を生成中..."):
+                            payload_a = payload_q[:-1]
+                            
                             prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
-
 【作成された問題】
 {res_q_clean}
-
-【参考資料テキスト】
-{combined_text}
 
 【絶対厳守ルール】
 1. プログラムコードブロック使用禁止。
 2. 「問題に誤りがある」「解けない可能性がある」といった逃げ口上は絶対禁止。必ず断定的なトーンで正解を導き出すこと。
 3. 指定された【対象レベル】の教育課程の範囲内で解説すること（逸脱した知識・逆三角関数等の使用は禁止）。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^`や`*`のプレーンテキスト表記は厳禁。"""
-                            
-                            res_a = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_a)
+                            payload_a.append(prompt_a)
+                            res_a = generate_content_with_retry(selected_model_name, payload_a, prompt_a)
                             res_a_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_a).strip()
                             
                         st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
@@ -415,7 +409,8 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                             ans_img.thumbnail((1024, 1024))
                             p_load.append(ans_img)
                         p = f"問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
-                        st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
+                        p_load.append(p)
+                        st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load, p)
                         add_to_history("テスト採点", st.session_state.solve_feedback)
                 if st.session_state.solve_feedback: 
                     st.success("📊 添削・採点結果")
