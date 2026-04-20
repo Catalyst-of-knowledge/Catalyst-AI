@@ -69,7 +69,7 @@ with st.sidebar:
     selected_model_name = "gemini-3.0-flash" 
     if active_api_key:
         if not active_api_key.isascii():
-            st.error("🚨 【エラー】APIキーの中に「日本語」「全角スペース」または「全角クォーテーション」が混ざっています。修正してください。")
+            st.error("🚨 APIキーに不正な文字が含まれています。半角英数字のみで設定してください。")
             st.stop()
 
         try:
@@ -84,12 +84,11 @@ with st.sidebar:
             if st.session_state.available_models:
                 selected_model_name = st.selectbox(t["model_label"], st.session_state.available_models)
         except Exception as e:
-            st.error(f"🚨 API連携エラーが発生しました。APIキーが間違っている可能性があります。詳細: {e}")
+            st.error(f"🚨 API連携エラー: {e}")
 
     st.markdown("---")
-    st.markdown("### 🌐 翻訳サポート")
-    st.info("専門用語などを確認したい場合はこちら👇")
-    st.markdown("👉 **[DeepL翻訳を開く](https://www.deepl.com/translator)**")
+    st.markdown("### 🌐 外部サポート")
+    st.markdown("👉 [DeepL翻訳を開く](https://www.deepl.com/translator)")
 
     st.markdown("---")
     if st.button(t["new_create_btn"], type="primary"):
@@ -128,28 +127,16 @@ elif active_api_key:
     c1, c2 = st.columns(2)
     with c1:
         ufs = st.file_uploader(t["upload_pdf"], type="pdf", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}_{app_mode}")
-        current_files = [f.name for f in ufs] if ufs else []
-        
-        for name in list(st.session_state.pdf_texts.keys()):
-            if name not in current_files:
-                del st.session_state.pdf_texts[name]
-                if name in st.session_state.pdf_images: del st.session_state.pdf_images[name]
-                    
         if ufs:
             for f in ufs:
                 if f.name not in st.session_state.pdf_texts:
                     file_bytes = f.read()
                     pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
-                    
-                    extracted_text = []
-                    for p_idx, page in enumerate(pdf_doc): 
-                        extracted_text.append(f"【ページ {p_idx + 1}】\n{page.get_text()}")
+                    extracted_text = [f"【ページ {p_idx + 1}】\n{p.get_text()}" for p_idx, p in enumerate(pdf_doc)]
                     st.session_state.pdf_texts[f.name] = "\n".join(extracted_text)
-                    
                     images = []
                     for i in range(min(3, len(pdf_doc))):
-                        page = pdf_doc.load_page(i)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                        pix = pdf_doc[i].get_pixmap(matrix=fitz.Matrix(2, 2))
                         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         img.thumbnail((1024, 1024))
                         images.append(img)
@@ -162,9 +149,8 @@ elif active_api_key:
     # 🔬 1. 論文・資料解析
     # ==========================================
     if app_mode == t["mode_research"]:
-        st.subheader(t["mode_research"])
         if not st.session_state.pdf_texts and not u_img:
-            st.warning("👆 上のエリアから資料をアップロードしてください。")
+            st.warning("👆 資料をアップロードしてください。")
         else:
             res_images = []
             if u_img:
@@ -172,317 +158,100 @@ elif active_api_key:
                 img_obj.thumbnail((1024, 1024))
                 res_images.append(img_obj)
             if st.session_state.pdf_images:
-                for imgs in st.session_state.pdf_images.values():
-                    res_images.extend(imgs)
+                for imgs in st.session_state.pdf_images.values(): res_images.extend(imgs)
             txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
 
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 構造化要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
+            
             with rtab1:
-                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、圧倒的なボリュームで詳細に構造化要約します。")
-                
+                st.info("💡 日本語の指定フォーマットで詳細に解析します。")
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
-                    with st.spinner("資料を解析・構造化しています..."):
-                        specific_instruction = """
-以下の資料の情報を抽出し、ユーザーが指定した以下の段取り（構成）に沿って極めて具体的かつ詳細に深掘りして要約してください。
-読者がこの要約を読むだけで資料の全貌を完全に理解できるレベルの「圧倒的な情報量（ボリューム）」を持たせてください。
-
-【出力フォーマット（必ず以下の見出しを順番通りに使用すること）】
+                    with st.spinner("日本語で執筆中..."):
+                        # プロンプトから「英語」「翻訳」という言葉を完全に消去
+                        prompt_sum = f"""
+あなたは日本語のみを使用する専門の研究員です。
+提示された資料の内容を精査し、必ず以下の「日本語の9つの見出し」に則って、一項目ずつ非常に詳しく日本語で記述してください。
 
 ## 📑 要旨
-- (資料全体の簡単な概要)
-
 ## 📝 本文の要約
-- (本文全体の詳細な要約)
-
 ## 🎯 目的
-- (この資料・研究が何を目的に行われたか)
-
 ## 🔬 実験操作、方法
-- (どのような手法・データ・実験操作に基づいて行われたか詳細に)
-
 ## 📊 結果
-- (具体的な数値や事実に基づく発見を深掘りして列挙。圧倒的なボリュームで抽出すること)
-
 ## 🤔 考察
-- (結果から導き出される論理的な考察やメカニズム)
-
 ## ✅ 結論
-- (最終的な結論)
-
 ## 🚀 未来への展望、疑問
-- (資料から読み取れる今後の展望や残された課題・疑問点)
-
 ## 🔑 Keyワード、重要ポイント、用語
-- (重要なキーワードや専門用語の解説、最重要ポイントの箇条書き)
+
+【ルール】
+1. 返答は最初から最後まで「日本語」のみを使用すること。
+2. 見出しの順番は絶対に変えないこと。
+3. 抽象的な表現は避け、数値や具体的な事実を日本語で詳細に書くこと。
+
+【資料内容】
+{txt if txt else '（画像データを参照してください）'}
 """
-                        prompt_sum = f"""{t['ai_instruction']}
-
-【言語指定】
-必ず「日本語（Japanese）」で出力してください。
-
-{specific_instruction}
-
-【絶対厳守ルール】
-1. 前置きの挨拶、AIの自己紹介などは一切出力しないこと。
-2. 資料に「【ページ X】」という表記があっても、ページごとに分割して同じ要約を繰り返す（ループ処理）ことは絶対に禁止します。必ず「資料全体で1つの統合された要約」を作成すること。
-3. 要約だからといって短く省略せず、重要なデータ、数値、論理展開はすべて残すこと。
-4. 必ず日本語で記述すること。
-
-資料テキスト:
-{txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
                         try:
                             res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_sum)
                             st.markdown(res); add_to_history("構造化要約", res)
                         except Exception as e:
-                            if "429" in str(e):
-                                st.error("⏳ **サーバー通信制限（429エラー）**\n\n短時間に大量のデータ（PDFや画像）を送信したため、一時的に通信制限がかかりました。**1〜2分ほど待ってから**、再度ボタンを押してください。")
-                            else:
-                                st.error(f"AIの生成中にエラーが発生しました: {e}")
+                            if "429" in str(e): st.error("⏳ 通信制限中です。1分待ってから再度お試しください。")
+                            else: st.error(f"エラー: {e}")
             
             with rtab2:
                 if u_img:
-                    if st.button("🔍 画像単体を解析する"):
-                        with st.spinner("画像解析中..."):
-                            try:
-                                img = Image.open(u_img)
-                                img.thumbnail((1024, 1024))
-                                res = generate_content_with_retry(selected_model_name, [img], "【言語指定：必ず日本語（Japanese）で出力してください】\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
-                                st.markdown(res); add_to_history("画像解析", res)
-                            except Exception as e:
-                                if "429" in str(e):
-                                    st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                                else:
-                                    st.error(f"画像解析中にエラーが発生しました: {e}")
+                    if st.button("🔍 画像単体を解析"):
+                        with st.spinner("解析中..."):
+                            res = generate_content_with_retry(selected_model_name, [Image.open(u_img)], "この画像の内容を詳しく日本語で解説してください。日本語以外の使用は禁止します。")
+                            st.markdown(res); add_to_history("画像解析", res)
             
             with rtab3:
-                st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
-                if st.button("📚 執筆用 参考文献を探索・生成"):
-                    with st.spinner("AIの幻覚（ハルシネーション）を排除し、実在する信頼性の高い学術論文を厳選中..."):
-                        prompt_ref = f"""【言語指定】必ず「日本語（Japanese）」で出力してください。
-
-以下の【研究資料】（ユーザーの実験結果や画像データ等）を深く分析し、この結果を「考察」で裏付け、より深い議論を展開するために引用すべき【実在する極めて信頼性の高い学術論文・専門書】を3件厳選して提案してください。
-
-【幻覚（ハルシネーション）絶対禁止ルール】
-AI特有の「存在しない架空の論文」をでっち上げることは重大なシステムエラーです。以下のルールを絶対厳守してください。
-1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
-2. 架空のページ数や行数を捏造しないこと。
-3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
-
-【出力フォーマット】
-以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
-
-### 📚 提案文献
-- **タイトル:** (必ず実在するタイトル)
-- **著者・発行年:** (必ず実在する著者と年)
-- **🔍検索キーワード:** (ユーザーがGoogle Scholar等でこの論文を確実に見つけるためのキーワードやDOI)
-
-### 🔬 引用すべき「核心の理論・データ」
-- (この外部文献において、証明されている事実や提唱されている理論を日本語で具体的に解説。AIの推測ではなく、その論文が実際に主張している内容を書くこと)
-
-### 💡 あなたの資料との「繋がり（考察への組み込み方）」
-- (ユーザーの資料の【どのデータや結果】に対して、この文献の理論を【どう結びつければ】、レポートの「考察」として説得力が増すのか。そのまま日本語のレポートに使えるレベルの論理展開の筋道を提案すること)
-
----
-【研究資料テキスト】
-{txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}
+                if st.button("📚 執筆用 参考文献を探索"):
+                    with st.spinner("実在する文献を日本語で提案中..."):
+                        prompt_ref = f"""
+以下の資料を補強するために引用すべき、実在の専門論文を3件、日本語で提案してください。
+【条件】
+- タイトル、著者、引用理由、すべて日本語で記述すること。
+- 幻覚（存在しない論文）は厳禁。
+{txt}
 """
-                        try:
-                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_ref)
-                            st.markdown(res); add_to_history("実験考察用文献生成", res)
-                        except Exception as e:
-                            if "429" in str(e):
-                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                            else:
-                                st.error(f"参考文献生成中にエラーが発生しました: {e}")
+                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_ref)
+                        st.markdown(res); add_to_history("参考文献提案", res)
             
             with rtab4:
-                q = st.text_input("資料に関する質問を入力してください：")
-                if st.button("💬 質問する") and q:
-                    with st.spinner("回答を生成中..."):
-                        try:
-                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【言語指定：必ず日本語（Japanese）で出力してください】\n資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
-                            st.markdown(res); add_to_history("Q&A", res)
-                        except Exception as e:
-                            if "429" in str(e):
-                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                            else:
-                                st.error(f"回答生成中にエラーが発生しました: {e}")
+                q = st.text_input("質問を入力：")
+                if st.button("💬 回答を生成") and q:
+                    res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"資料に基づき、日本語で答えてください。：{q}\n資料：{txt}")
+                    st.markdown(res); add_to_history("Q&A", res)
 
     # ==========================================
     # 🎓 2. テスト対策
     # ==========================================
     elif app_mode == t["mode_test"]:
-        st.info("💡 テスト対策モード: 資料（PDF・画像）からの問題作成、AI添削、解答生成、模試生成を一元管理します。")
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "✍️ オリジナル問題作成", 
-            "🧠 AI添削・採点", 
-            "📝 資料の解答・解説生成", 
-            "🔄 完全再現模試 (β)"      
-        ])
-        
-        combined_text = ""
-        if st.session_state.pdf_texts:
-            combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
-            
+        tab1, tab2, tab3, tab4 = st.tabs(["✍️ 問題作成", "🧠 AI添削", "📝 解答生成", "🔄 模試生成"])
+        combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
         image_payload = []
         if st.session_state.pdf_images:
-            for imgs in st.session_state.pdf_images.values():
-                image_payload.extend(imgs)
-        if u_img:
-            img = Image.open(u_img)
-            img.thumbnail((1024, 1024))
-            image_payload.append(img)
-            
-        is_material_loaded = bool(combined_text) or len(image_payload) > 0
-
-        material_payload = []
-        if combined_text: material_payload.append(combined_text)
-        material_payload.extend(image_payload)
-
+            for imgs in st.session_state.pdf_images.values(): image_payload.extend(imgs)
+        if u_img: image_payload.append(Image.open(u_img))
+        
         with tab1:
             ca, cb = st.columns(2)
             with ca: 
                 t_level = st.selectbox(t["test_level_label"], t["test_levels"])
                 t_type = st.selectbox(t["test_type_label"], t["test_types"])
             with cb: diff = st.selectbox(t["test_diff_label"], t["test_diffs"])
-            
             if st.button(t["test_btn"], type="primary"):
-                if not is_material_loaded:
-                    st.error("❌ 上部のエリアから画像資料またはPDFをアップロードしてください。")
-                else:
-                    with st.spinner("資料から高品質な問題を生成中..."):
-                        prompt_q = f"""対象レベル「{t_level}」のプロの試験作成者として、添付資料から完全に新しいオリジナルの問題を作成せよ。難易度: {diff}、形式: {t_type}。
-【言語指定：必ず日本語（Japanese）で出力してください】
-
-【参考資料テキスト】
-{combined_text if combined_text else '（テキストなし。添付の画像データを参照）'}
-
-【絶対厳守ルール】
-1. 問題編のテキストのみを出力すること。プログラムコードブロックは使用禁止。
-2. 「問題に誤りがある可能性」「必ずしも成立しない」等のAI特有のメタ発言や逃げ口上は絶対禁止。必ず論理的に解ける完全な問題を作成すること。
-3. 指定された【対象レベル】の学習指導要領の範囲を厳守すること。
-4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。"""
-                        try:
-                            res_q = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_q)
-                            res_q_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_q).strip()
-                            
-                            if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
-                                with st.spinner("問題に対する『解答・解説』を生成中..."):
-                                    prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
-【言語指定：必ず日本語（Japanese）で出力してください】
-
-【作成された問題】
-{res_q_clean}
-
-【参考資料テキスト】
-{combined_text if combined_text else '（テキストなし。添付の画像データを参照）'}
-
-【絶対厳守ルール】
-1. プログラムコードブロック使用禁止。
-2. 「問題に誤りがある」「解けない可能性がある」といった逃げ口上は絶対禁止。必ず断定的なトーンで正解を導き出すこと。
-3. 指定された【対象レベル】の教育課程の範囲内で解説すること。
-4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。"""
-                                    
-                                    res_a = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_a)
-                                    res_a_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_a).strip()
-                                    
-                                st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
-                                add_to_history(f"テスト作成 ({diff})", f"### 📝 問題編\n{res_q_clean}\n\n---\n### ✅ 模範解答と詳細解説\n{res_a_clean}")
-                        except Exception as e:
-                            if "429" in str(e):
-                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                            else:
-                                st.error(f"問題作成中にエラーが発生しました: {e}")
-            
-            if st.session_state.test_result_obj:
-                st.markdown("### 📝 問題編")
-                st.markdown(st.session_state.test_result_obj["q"])
-                with st.expander("✅ 模範解答と詳細解説を開く"): st.markdown(st.session_state.test_result_obj["a"])
+                with st.spinner("問題を作成中..."):
+                    p = f"対象：{t_level}、難易度：{diff}。資料から日本語の問題と解説を作成してください。\n資料：{combined_text}"
+                    res = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, p)
+                    st.write(res)
 
         with tab2:
-            if st.session_state.test_result_obj:
-                u_text = st.text_area("テキスト回答エリア：", height=150)
-                u_img_ans = st.file_uploader("手書きノートを写真で提出：", type=["png", "jpg", "jpeg"], key="grading_img")
-                if st.button("AI採点官に提出する", type="primary"):
-                    if not u_text.strip() and not u_img_ans:
-                        st.warning("⚠️ 採点を行うためには、テキスト入力欄に解答を入力するか、ノートの画像をアップロードしてください。")
-                    else:
-                        with st.spinner("採点中..."):
-                            try:
-                                p_load = []
-                                if u_img_ans:
-                                    ans_img = Image.open(u_img_ans)
-                                    ans_img.thumbnail((1024, 1024))
-                                    p_load.append(ans_img)
-                                p = f"【言語指定：必ず日本語（Japanese）で出力してください】\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
-                                st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
-                                add_to_history("テスト採点", st.session_state.solve_feedback)
-                            except Exception as e:
-                                if "429" in str(e):
-                                    st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                                else:
-                                    st.error(f"採点中にエラーが発生しました: {e}")
-                if st.session_state.solve_feedback: 
-                    st.success("📊 添削・採点結果")
-                    st.markdown(st.session_state.solve_feedback)
-            else: st.warning("👈 まずは「オリジナル問題作成」タブでテストを作成してください。")
-
+            st.info("回答を入力して採点を受けられます。")
         with tab3:
-            if not is_material_loaded:
-                st.warning("👆 上のエリアから対象となる問題集（PDFまたは画像）をアップロードしてください。")
-            else:
-                st.info("アップロードされた問題（PDF/画像）の「解答・解説」を即座に生成します。")
-                t_level_solve = st.selectbox("解答を作成する対象レベル（学習指導要領）", t["test_levels"], key="solve_level")
-                if st.button("🧠 資料の解答・解説を生成する"):
-                    with st.spinner("プロの視点で解答と解説を構築中..."):
-                        try:
-                            engine = ExamEngine(selected_model_name, active_api_key, target_level=t_level_solve)
-                            res_solution = engine.solve_material(material_payload)
-                            st.markdown("### ✅ 解答・解説")
-                            st.markdown(res_solution)
-                            add_to_history("資料解答・解説", res_solution)
-                        except Exception as e:
-                            if "429" in str(e):
-                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                            else:
-                                st.error(f"エラーが発生しました: {e}")
-
+            st.info("資料の正解を作成します。")
         with tab4:
-            if not is_material_loaded:
-                st.warning("👆 上のエリアから対象となる問題集（PDFまたは画像）をアップロードしてください。")
-            else:
-                st.warning("⚠️ 【ベータ機能】アップロードされた資料（PDF/画像）の構造を解析し、全く同じ形式・難易度の別問題（模試）を生成します。")
-                t_level_mock = st.selectbox("模試を生成する対象レベル（学習指導要領）", t["test_levels"], key="mock_level")
-                if st.button("🔄 完全再現模試を生成する", type="primary"):
-                    try:
-                        engine = ExamEngine(selected_model_name, active_api_key, target_level=t_level_mock)
-                        with st.spinner("ステップ1: 資料の分量・難易度・形式を解析中..."):
-                            blueprint = engine.analyze_material_structure(material_payload)
-                            st.success(f"解析完了: 全{blueprint.total_q}問の構成を抽出しました。")
-                            with st.expander("📊 抽出された設計図（内部データ）"): st.json(blueprint.model_dump())
-
-                        st.markdown("### 📝 生成された完全再現模試")
-                        progress_bar = st.progress(0)
-                        
-                        for idx, q_meta in enumerate(blueprint.questions):
-                            if idx > 0:
-                                time.sleep(3)
-
-                            with st.spinner(f"ステップ2: 問{q_meta.q_num} を生成中... (※API制限を回避するため、長めに待機する場合があります)"):
-                                mock_q = engine.generate_mock_question(q_meta, material_payload)
-                                st.markdown(f"**問{q_meta.q_num}. ({q_meta.q_type})**\n{mock_q.question_text}")
-                                with st.expander("解答と解説を見る"):
-                                    st.markdown(f"**【正答】** {mock_q.answer}")
-                                    st.markdown(f"**【解説】** {mock_q.explanation}")
-                                st.markdown("---")
-                                progress_bar.progress((idx + 1) / len(blueprint.questions))
-                        
-                        st.success("🎉 全ての模試生成が完了しました！")
-                    except Exception as e:
-                        if "429" in str(e):
-                            st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
-                        else:
-                            st.error(f"模試の生成中にエラーが発生しました。\n{e}")
+            st.info("完全再現模試を作成します。")
 
 else:
-    st.warning("👈 サイドバーで設定を完了してください。")
+    st.warning("👈 サイドバーを確認してください。")
