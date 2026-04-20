@@ -39,7 +39,6 @@ def on_mode_change():
 
 # --- サイドバー・モード管理 ---
 with st.sidebar:
-    # 【変更点】データ可視化モードを選択肢から削除し、2つに絞りました
     app_mode = st.radio(
         t["sidebar_mode_label"], 
         [t["mode_research"], t["mode_test"]],
@@ -47,27 +46,19 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("### 🔑 認証システム")
+    st.markdown("### 🔑 システム稼働状況")
     
-    # 【変更点】PROプランの案内と課金ボタンを削除しました
     active_api_key = None
     
-    user_pass = st.text_input("💎 専用 Pass (登録者専用)", type="password")
-    
-    valid_passes = [
-        "admin",               
-        "pro_2024_03_secure",  
-        "test_pass_980"        
-    ]
-    
-    if user_pass in valid_passes:
-        st.success("🔓 認証されました")
-        if "ADMIN_API_KEY" in st.secrets: active_api_key = st.secrets["ADMIN_API_KEY"]
+    # 【変更点】パスワード入力を廃止し、サーバーに設定したAPIキーを無条件で読み込む
+    if "ADMIN_API_KEY" in st.secrets:
+        active_api_key = st.secrets["ADMIN_API_KEY"]
+        st.success("🟢 AIサーバー接続済み (Pro稼働中)")
     else:
-        user_api_key = st.text_input(t["api_label"], type="password", key="user_input_key")
-        st.button("🔑 ご自身のAPIキーを適用", use_container_width=True)
-        st.markdown(f"<div style='text-align: right; font-size: 12px;'>👉 <a href='https://aistudio.google.com/app/apikey' target='_blank'>APIキー取得手順</a></div>", unsafe_allow_html=True)
-        active_api_key = user_api_key
+        st.warning("サーバーにAPIキーが設定されていません。")
+        user_api_key = st.text_input("ご自身のGemini APIキーを入力してください", type="password")
+        if user_api_key:
+            active_api_key = user_api_key
 
     selected_model_name = "gemini-3.0-flash" 
     if active_api_key:
@@ -115,7 +106,6 @@ if st.session_state.viewing_history:
         st.rerun()
 
 elif active_api_key:
-    # 【変更点】データモードがなくなったため、アップロードエリアの条件分岐をスッキリさせました
     st.subheader(t["header_upload"])
     c1, c2 = st.columns(2)
     with c1:
@@ -222,13 +212,18 @@ elif active_api_key:
                             specific_instruction = f"以下の資料全体を「{mode}」の形式で詳細に要約・整理してください。"
 
                         prompt_sum = f"""{t['ai_instruction']}
+
+【🚨 超重要：言語指定（絶対に遵守すること）】
+ユーザーの入力した元の資料（PDFや画像）が「英語」等の外国語であった場合でも、AIであるあなたは、その内容を【必ず100%日本語 (Japanese) 】に翻訳・変換してから出力してください。
+見出し、箇条書き、本文、説明文を含め、英語のまま出力することは重大なシステムエラーとみなします。
+
 {specific_instruction}
 
 【絶対厳守ルール】
 1. 前置きの挨拶、AIの自己紹介、「料理のレシピ」等の無関係な言葉は一切出力しないこと。
 2. 資料に「【ページ X】」という表記があっても、ページごとに分割して同じ要約を繰り返す（ループ処理）ことは絶対に禁止します。必ず「資料全体で1つの統合された要約」を作成すること。
 3. 要約だからといって短く省略せず、重要なデータ、数値、論理展開はすべて残すこと。
-4. 元の資料が英語や他の言語であっても、結果は【必ずすべて日本語】で出力すること。
+4. 最終出力は【必ずすべて日本語(Japanese)】で記述すること。
 
 資料テキスト:
 {txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
@@ -241,23 +236,25 @@ elif active_api_key:
                         with st.spinner("画像解析中..."):
                             img = Image.open(u_img)
                             img.thumbnail((1024, 1024))
-                            res = generate_content_with_retry(selected_model_name, [img], "この画像から読み取れる科学的事実、データの傾向を詳細に解説してください。必ずすべて日本語で出力すること。")
+                            res = generate_content_with_retry(selected_model_name, [img], "【重要：必ずすべて日本語(Japanese)で出力すること】\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
                             st.markdown(res); add_to_history("画像解析", res)
             
             with rtab3:
                 st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
                 if st.button("📚 執筆用 参考文献を探索・生成"):
                     with st.spinner("AIの幻覚（ハルシネーション）を排除し、実在する信頼性の高い学術論文を厳選中..."):
-                        prompt_ref = f"""以下の【研究資料】（ユーザーの実験結果や画像データ等）を深く分析し、この結果を「考察（Discussion）」で裏付け、より深い議論を展開するために引用すべき【実在する極めて信頼性の高い学術論文・専門書】を3件厳選して提案してください。
+                        prompt_ref = f"""【🚨 超重要：言語指定（絶対に遵守すること）】
+元の資料が英語であっても、出力結果（解説や提案理由など）は【必ずすべて日本語 (Japanese)】で記述してください。
+
+以下の【研究資料】（ユーザーの実験結果や画像データ等）を深く分析し、この結果を「考察（Discussion）」で裏付け、より深い議論を展開するために引用すべき【実在する極めて信頼性の高い学術論文・専門書】を3件厳選して提案してください。
 
 【🚨 幻覚（ハルシネーション）絶対禁止ルール】
 AI特有の「存在しない架空の論文」をでっち上げることは重大なシステムエラーです。以下のルールを絶対厳守してください。
 1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
 2. 架空のページ数や行数を捏造しないこと。
 3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
-4. 元の研究資料の言語に関わらず、結果は【必ずすべて日本語】で出力すること。
 
-【出力フォーマット】
+【出力フォーマット】（以下の項目も日本語で出力すること）
 以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
 
 ### 📚 提案文献
@@ -266,10 +263,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 - **🔍検索キーワード:** (ユーザーがGoogle Scholar等でこの論文を確実に見つけるためのキーワードやDOI)
 
 ### 🔬 引用すべき「核心の理論・データ」
-- (この外部文献において、証明されている事実や提唱されている理論を具体的に解説。AIの推測ではなく、その論文が実際に主張している内容を書くこと)
+- (この外部文献において、証明されている事実や提唱されている理論を日本語で具体的に解説。AIの推測ではなく、その論文が実際に主張している内容を書くこと)
 
 ### 💡 あなたの資料との「繋がり（考察への組み込み方）」
-- (ユーザーの資料の【どのデータや結果】に対して、この文献の理論を【どう結びつければ】、レポートの「考察」として説得力が増すのか。そのままレポートに使えるレベルの論理展開の筋道を提案すること)
+- (ユーザーの資料の【どのデータや結果】に対して、この文献の理論を【どう結びつければ】、レポートの「考察」として説得力が増すのか。そのまま日本語のレポートに使えるレベルの論理展開の筋道を提案すること)
 
 ---
 【研究資料テキスト（画像が添付されている場合は画像も参照）】
@@ -282,7 +279,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 q = st.text_input("資料に関する質問を入力してください：")
                 if st.button("💬 質問する") and q:
                     with st.spinner("回答を生成中..."):
-                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"資料（画像およびテキスト）に基づき質問に学術的に答えてください。元の資料の言語に関わらず【必ずすべて日本語】で出力してください。\n\n質問: {q}\n\n資料:\n{txt}")
+                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【最重要：回答は必ずすべて日本語(Japanese)で行うこと】\n資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
                         st.markdown(res); add_to_history("Q&A", res)
 
     # ==========================================
@@ -329,6 +326,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 else:
                     with st.spinner("資料から高品質な問題を生成中..."):
                         prompt_q = f"""対象レベル「{t_level}」のプロの試験作成者として、添付資料から完全に新しいオリジナルの問題を作成せよ。難易度: {diff}、形式: {t_type}。
+【重要：作成する問題文は必ずすべて日本語(Japanese)で記述すること】
 
 【参考資料テキスト（画像が添付されている場合は画像も参照）】
 {combined_text if combined_text else '（テキストなし。添付の画像データを参照）'}
@@ -345,6 +343,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                     if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
                         with st.spinner("問題に対する『解答・解説』を生成中..."):
                             prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
+【重要：解答および解説は必ずすべて日本語(Japanese)で記述すること】
 
 【作成された問題】
 {res_q_clean}
@@ -383,7 +382,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                                 ans_img = Image.open(u_img_ans)
                                 ans_img.thumbnail((1024, 1024))
                                 p_load.append(ans_img)
-                            p = f"問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
+                            p = f"【重要：必ずすべて日本語(Japanese)で出力すること】\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
                             st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
                             add_to_history("テスト採点", st.session_state.solve_feedback)
                 if st.session_state.solve_feedback: 
