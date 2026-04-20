@@ -51,13 +51,12 @@ with st.sidebar:
     active_api_key = None
     has_secret_key = False
     
-    # 【最強の安全装置】Secretsの読み込みでエラーが起きても絶対にアプリを落とさない
     try:
         if "ADMIN_API_KEY" in st.secrets:
             active_api_key = str(st.secrets["ADMIN_API_KEY"]).strip()
             has_secret_key = True
     except Exception:
-        pass # エラーが起きても無視して進む
+        pass 
 
     if has_secret_key and active_api_key:
         st.success("🟢 AIサーバー接続済み (Pro稼働中)")
@@ -86,6 +85,11 @@ with st.sidebar:
                 selected_model_name = st.selectbox(t["model_label"], st.session_state.available_models)
         except Exception as e:
             st.error(f"🚨 API連携エラーが発生しました。APIキーが間違っている可能性があります。詳細: {e}")
+
+    st.markdown("---")
+    st.markdown("### 🌐 翻訳サポート")
+    st.info("英語の専門用語や元の論文を確認したい場合はこちら👇")
+    st.markdown("👉 **[DeepL翻訳を開く](https://www.deepl.com/translator)**")
 
     st.markdown("---")
     if st.button(t["new_create_btn"], type="primary"):
@@ -172,12 +176,12 @@ elif active_api_key:
                     res_images.extend(imgs)
             txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
 
-            rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 比較・要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
+            rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 構造化要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
-                available_modes = [m for m in t["modes"] if "初学者" not in m and "重要ポイント" not in m]
-                mode = st.radio(t["prompt_summary_mode"], available_modes, horizontal=True)
+                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、圧倒的なボリュームで詳細に構造化要約します。")
                 
-                if st.button("📝 解析を実行", key="btn_sum"):
+                # 【変更点】モード選択のラジオボタンを完全に削除し、一撃のボタンのみにしました
+                if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
                     with st.spinner("資料を解析・構造化しています..."):
                         specific_instruction = """
 以下の資料の情報を抽出し、ユーザーが指定した以下の段取り（構成）に沿って極めて具体的かつ詳細に深掘りして要約してください。
@@ -230,9 +234,12 @@ elif active_api_key:
 {txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
                         try:
                             res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_sum)
-                            st.markdown(res); add_to_history(f"要約({mode})", res)
+                            st.markdown(res); add_to_history("構造化要約", res)
                         except Exception as e:
-                            st.error(f"AIの生成中にエラーが発生しました: {e}")
+                            if "429" in str(e):
+                                st.error("⏳ **サーバー通信制限（429エラー）**\n\n短時間に大量のデータ（PDFや画像）を送信したため、一時的に通信制限がかかりました。**1〜2分ほど待ってから**、再度ボタンを押してください。")
+                            else:
+                                st.error(f"AIの生成中にエラーが発生しました: {e}")
             
             with rtab2:
                 if u_img:
@@ -244,7 +251,10 @@ elif active_api_key:
                                 res = generate_content_with_retry(selected_model_name, [img], "【重要：必ずすべて日本語(Japanese)で出力すること】\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
                                 st.markdown(res); add_to_history("画像解析", res)
                             except Exception as e:
-                                st.error(f"画像解析中にエラーが発生しました: {e}")
+                                if "429" in str(e):
+                                    st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                                else:
+                                    st.error(f"画像解析中にエラーが発生しました: {e}")
             
             with rtab3:
                 st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
@@ -283,7 +293,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                             res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_ref)
                             st.markdown(res); add_to_history("実験考察用文献生成", res)
                         except Exception as e:
-                            st.error(f"参考文献生成中にエラーが発生しました: {e}")
+                            if "429" in str(e):
+                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                            else:
+                                st.error(f"参考文献生成中にエラーが発生しました: {e}")
             
             with rtab4:
                 q = st.text_input("資料に関する質問を入力してください：")
@@ -293,7 +306,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                             res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【最重要：回答は必ずすべて日本語(Japanese)で行うこと】\n資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
                             st.markdown(res); add_to_history("Q&A", res)
                         except Exception as e:
-                            st.error(f"回答生成中にエラーが発生しました: {e}")
+                            if "429" in str(e):
+                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                            else:
+                                st.error(f"回答生成中にエラーが発生しました: {e}")
 
     # ==========================================
     # 🎓 2. テスト対策
@@ -376,7 +392,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                                 st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
                                 add_to_history(f"テスト作成 ({diff})", f"### 📝 問題編\n{res_q_clean}\n\n---\n### ✅ 模範解答と詳細解説\n{res_a_clean}")
                         except Exception as e:
-                            st.error(f"問題作成中にエラーが発生しました: {e}")
+                            if "429" in str(e):
+                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                            else:
+                                st.error(f"問題作成中にエラーが発生しました: {e}")
             
             if st.session_state.test_result_obj:
                 st.markdown("### 📝 問題編")
@@ -402,7 +421,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                                 st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
                                 add_to_history("テスト採点", st.session_state.solve_feedback)
                             except Exception as e:
-                                st.error(f"採点中にエラーが発生しました: {e}")
+                                if "429" in str(e):
+                                    st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                                else:
+                                    st.error(f"採点中にエラーが発生しました: {e}")
                 if st.session_state.solve_feedback: 
                     st.success("📊 添削・採点結果")
                     st.markdown(st.session_state.solve_feedback)
@@ -423,7 +445,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                             st.markdown(res_solution)
                             add_to_history("資料解答・解説", res_solution)
                         except Exception as e:
-                            st.error(f"エラーが発生しました: {e}")
+                            if "429" in str(e):
+                                st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                            else:
+                                st.error(f"エラーが発生しました: {e}")
 
         with tab4:
             if not is_material_loaded:
@@ -457,7 +482,10 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                         
                         st.success("🎉 全ての模試生成が完了しました！")
                     except Exception as e:
-                        st.error(f"模試の生成中にエラーが発生しました。\n{e}")
+                        if "429" in str(e):
+                            st.error("⏳ 通信制限中です。1〜2分待ってから再度お試しください。")
+                        else:
+                            st.error(f"模試の生成中にエラーが発生しました。\n{e}")
 
 else:
     st.warning("👈 サイドバーで設定を完了してください。")
