@@ -76,10 +76,7 @@ with st.sidebar:
             genai.configure(api_key=active_api_key, transport='rest')
             if not st.session_state.available_models:
                 raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                
-                # 【修正箇所】gemmaなどを完全に排除し、gemini-3系のみを厳格に抽出する
-                advanced_models = [m for m in raw_models if 'gemini-3' in m]
-                
+                advanced_models = [m for m in raw_models if not re.search(r'gemini-[12]\.', m)]
                 if not advanced_models:
                     advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
                 st.session_state.available_models = advanced_models
@@ -90,8 +87,9 @@ with st.sidebar:
             st.error(f"🚨 API連携エラーが発生しました。詳細: {e}")
 
     st.markdown("---")
-    st.markdown("### 🌐 外部サポート")
-    st.markdown("👉 [DeepL翻訳を開く](https://www.deepl.com/translator)")
+    st.markdown("### 🌐 翻訳サポート")
+    st.info("専門用語などを確認したい場合はこちら👇")
+    st.markdown("👉 **[DeepL翻訳を開く](https://www.deepl.com/translator)**")
 
     st.markdown("---")
     if st.button(t["new_create_btn"], type="primary"):
@@ -149,7 +147,8 @@ elif active_api_key:
                     st.session_state.pdf_texts[f.name] = "\n".join(extracted_text)
                     
                     images = []
-                    for i in range(min(3, len(pdf_doc))):
+                    # 【修正ポイント①】 画像の読み込み上限を3ページから「最大20ページ」に拡大
+                    for i in range(min(20, len(pdf_doc))):
                         page = pdf_doc.load_page(i)
                         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
                         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
@@ -176,18 +175,20 @@ elif active_api_key:
             if st.session_state.pdf_images:
                 for imgs in st.session_state.pdf_images.values():
                     res_images.extend(imgs)
-            txt = "\n".join(st.session_state.pdf_texts.values())[:15000]
+            
+            # 【修正ポイント②】 テキストの読み込み上限を1万5千文字から「最大10万文字」に大幅拡大
+            txt = "\n".join(st.session_state.pdf_texts.values())[:100000]
 
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 構造化要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
                 st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、圧倒的なボリュームで詳細に構造化要約します。")
                 
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
-                    with st.spinner("資料を解析・構造化しています..."):
+                    with st.spinner("資料の全ページを解析・構造化しています... (ページ数が多いと数十秒かかります)"):
                         prompt_sum = f"""
 【最重要命令】
 これから出力するテキストは、必ずすべて「日本語（Japanese）」で記述してください。
-あなたは日本の研究者です。以下の資料を精読し、指定された9つの見出しフォーマットに沿って、極めて具体的かつ詳細に要約を作成してください。
+あなたは日本の研究者です。以下の膨大な資料の全ページを精読し、指定された9つの見出しフォーマットに沿って、極めて具体的かつ詳細に要約を作成してください。
 
 【出力フォーマット】（必ず以下の見出しをそのまま使用すること）
 ## 📑 要旨
@@ -295,9 +296,10 @@ elif active_api_key:
             "🔄 完全再現模試 (β)"      
         ])
         
+        # 【修正ポイント③】 テストモード側の文字制限も「最大10万文字」に拡大
         combined_text = ""
         if st.session_state.pdf_texts:
-            combined_text = "\n".join(st.session_state.pdf_texts.values())[:20000]
+            combined_text = "\n".join(st.session_state.pdf_texts.values())[:100000]
             
         image_payload = []
         if st.session_state.pdf_images:
@@ -325,7 +327,7 @@ elif active_api_key:
                 if not is_material_loaded:
                     st.error("❌ 上部のエリアから画像資料またはPDFをアップロードしてください。")
                 else:
-                    with st.spinner("資料から高品質な問題を生成中..."):
+                    with st.spinner("全ページから高品質な問題を生成中..."):
                         prompt_q = f"""
 【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。
 
