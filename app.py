@@ -76,7 +76,8 @@ with st.sidebar:
             genai.configure(api_key=active_api_key, transport='rest')
             if not st.session_state.available_models:
                 raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                advanced_models = [m for m in raw_models if not re.search(r'gemini-[12]\.', m)]
+                # 【重要】Gemmaモデルを完全に排除し、Gemini-3系のみを抽出
+                advanced_models = [m for m in raw_models if 'gemini-3' in m and 'gemma' not in m.lower()]
                 if not advanced_models:
                     advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
                 st.session_state.available_models = advanced_models
@@ -147,7 +148,6 @@ elif active_api_key:
                     st.session_state.pdf_texts[f.name] = "\n".join(extracted_text)
                     
                     images = []
-                    # 【修正ポイント①】 画像の読み込み上限を3ページから「最大20ページ」に拡大
                     for i in range(min(20, len(pdf_doc))):
                         page = pdf_doc.load_page(i)
                         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
@@ -175,22 +175,21 @@ elif active_api_key:
             if st.session_state.pdf_images:
                 for imgs in st.session_state.pdf_images.values():
                     res_images.extend(imgs)
-            
-            # 【修正ポイント②】 テキストの読み込み上限を1万5千文字から「最大10万文字」に大幅拡大
             txt = "\n".join(st.session_state.pdf_texts.values())[:100000]
 
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 構造化要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
-                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、圧倒的なボリュームで詳細に構造化要約します。")
+                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、詳細に構造化要約します。")
                 
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
-                    with st.spinner("資料の全ページを解析・構造化しています... (ページ数が多いと数十秒かかります)"):
+                    with st.spinner("日本語で解析・構造化しています... (ページ数が多いと数十秒かかります)"):
+                        # 【完全日本語化プロンプト】英語や翻訳という言葉を一切排除
                         prompt_sum = f"""
-【最重要命令】
-これから出力するテキストは、必ずすべて「日本語（Japanese）」で記述してください。
-あなたは日本の研究者です。以下の膨大な資料の全ページを精読し、指定された9つの見出しフォーマットに沿って、極めて具体的かつ詳細に要約を作成してください。
+【絶対厳守の命令】
+あなたは日本の専門研究員です。以下の資料を精読し、指定された9つの見出しに沿って、極めて具体的かつ詳細な要約を作成してください。
+出力は最初から最後まで、必ず「日本語（Japanese）」のみを使用してください。
 
-【出力フォーマット】（必ず以下の見出しをそのまま使用すること）
+【指定フォーマット（順番と見出しをそのまま使うこと）】
 ## 📑 要旨
 ## 📝 本文の要約
 ## 🎯 目的
@@ -202,9 +201,9 @@ elif active_api_key:
 ## 🔑 Keyワード、重要ポイント、用語
 
 【記述のルール】
-1. 挨拶や無関係な言葉は一切出力しないこと。
-2. 資料全体で1つの統合された要約を作成すること。
-3. 圧倒的な情報量（ボリューム）を持たせ、具体的な数値やデータを含めること。
+1. 挨拶やAIとしての前置きは一切不要です。
+2. 圧倒的な情報量（ボリューム）を持たせ、資料内の具体的な数値やデータを含めてください。
+3. すべて日本語で出力すること。
 
 【資料内容】
 {txt if txt else '（添付の画像データを参照してください）'}
@@ -225,7 +224,7 @@ elif active_api_key:
                             try:
                                 img = Image.open(u_img)
                                 img.thumbnail((1024, 1024))
-                                res = generate_content_with_retry(selected_model_name, [img], "【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
+                                res = generate_content_with_retry(selected_model_name, [img], "【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
                                 st.markdown(res); add_to_history("画像解析", res)
                             except Exception as e:
                                 if "429" in str(e):
@@ -238,7 +237,7 @@ elif active_api_key:
                 if st.button("📚 執筆用 参考文献を探索・生成"):
                     with st.spinner("AIの幻覚（ハルシネーション）を排除し、実在する信頼性の高い学術論文を厳選中..."):
                         prompt_ref = f"""
-【最重要命令】必ずすべて「日本語（Japanese）」で出力してください。
+【絶対厳守の命令】必ずすべて「日本語（Japanese）」で出力してください。
 
 以下の【研究資料】を分析し、この結果を考察で裏付け、より深い議論を展開するために引用すべき【実在する信頼性の高い学術論文】を3件厳選して提案してください。
 
@@ -276,7 +275,7 @@ elif active_api_key:
                 if st.button("💬 質問する") and q:
                     with st.spinner("回答を生成中..."):
                         try:
-                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。\n\n資料に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
+                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\n\n資料に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
                             st.markdown(res); add_to_history("Q&A", res)
                         except Exception as e:
                             if "429" in str(e):
@@ -296,7 +295,6 @@ elif active_api_key:
             "🔄 完全再現模試 (β)"      
         ])
         
-        # 【修正ポイント③】 テストモード側の文字制限も「最大10万文字」に拡大
         combined_text = ""
         if st.session_state.pdf_texts:
             combined_text = "\n".join(st.session_state.pdf_texts.values())[:100000]
@@ -329,7 +327,7 @@ elif active_api_key:
                 else:
                     with st.spinner("全ページから高品質な問題を生成中..."):
                         prompt_q = f"""
-【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。
+【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。
 
 対象レベル「{t_level}」のプロの試験作成者として、添付資料から完全に新しいオリジナルの問題を作成せよ。難易度: {diff}、形式: {t_type}。
 
@@ -349,7 +347,7 @@ elif active_api_key:
                             if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
                                 with st.spinner("問題に対する『解答・解説』を生成中..."):
                                     prompt_a = f"""
-【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。
+【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。
 
 以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
 
@@ -395,7 +393,7 @@ elif active_api_key:
                                     ans_img = Image.open(u_img_ans)
                                     ans_img.thumbnail((1024, 1024))
                                     p_load.append(ans_img)
-                                p = f"【最重要命令】必ずすべて「日本語（Japanese）」で記述してください。\n\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
+                                p = f"【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\n\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
                                 st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
                                 add_to_history("テスト採点", st.session_state.solve_feedback)
                             except Exception as e:
