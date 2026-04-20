@@ -76,7 +76,6 @@ with st.sidebar:
             genai.configure(api_key=active_api_key, transport='rest')
             if not st.session_state.available_models:
                 raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                # Gemmaモデルを完全に排除し、Gemini-3系のみを抽出
                 advanced_models = [m for m in raw_models if 'gemini-3' in m and 'gemma' not in m.lower()]
                 if not advanced_models:
                     advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
@@ -179,13 +178,14 @@ elif active_api_key:
 
             rtab1, rtab2, rtab3, rtab4 = st.tabs(["⚔️ 構造化要約", "📊 画像解析", "📚 引用ガイド", "💬 Q&A"])
             with rtab1:
-                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、詳細に構造化要約します。")
+                st.info("💡 資料を「要旨」「目的」「実験操作」「結果」「考察」などの9項目に分けて、圧倒的なボリュームで詳細に構造化要約します。")
                 
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
-                    with st.spinner("日本語で解析・構造化しています... (ページ数が多いと数十秒かかります)"):
+                    with st.spinner("情報を最大限に引き出し、分量2倍で執筆しています... (長文になるため少し時間がかかります)"):
+                        # 【修正ポイント】出力量を強制的に2倍以上に膨らませる強烈な指示を追加
                         prompt_sum = f"""
 【絶対厳守の命令】
-あなたは日本の専門研究員です。以下の資料を精読し、指定された9つの見出しに沿って、極めて具体的かつ詳細な要約を作成してください。
+あなたは日本の専門研究員です。以下の資料を精読し、指定された9つの見出しに沿って、「通常の要約の2倍以上の圧倒的な文字数と情報量」で、極めて長文かつ詳細なレポートを作成してください。
 出力は最初から最後まで、必ず「日本語（Japanese）」のみを使用してください。
 
 【指定フォーマット（順番と見出しをそのまま使うこと）】
@@ -199,9 +199,9 @@ elif active_api_key:
 ## 🚀 未来への展望、疑問
 ## 🔑 Keyワード、重要ポイント、用語
 
-【記述のルール】
+【記述のルール：ボリュームの最大化】
 1. 挨拶やAIとしての前置きは一切不要です。
-2. 圧倒的な情報量（ボリューム）を持たせ、資料内の具体的な数値やデータを含めてください。
+2. 【分量2倍の強制】要約だからといって決して短くまとめないでください。各見出しについて、資料内の些細なデータ、数値、背景、論理展開のニュアンスに至るまで一切省略せず、可能な限り文章を徹底的に膨らませて、非常に長大な解説に仕上げてください。
 3. すべて日本語で出力すること。
 
 【資料内容】
@@ -223,7 +223,7 @@ elif active_api_key:
                             try:
                                 img = Image.open(u_img)
                                 img.thumbnail((1024, 1024))
-                                res = generate_content_with_retry(selected_model_name, [img], "【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
+                                res = generate_content_with_retry(selected_model_name, [img], "【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\nこの画像から読み取れる科学的事実、データの傾向を限界まで深掘りし、非常に詳細な長文で解説してください。")
                                 st.markdown(res); add_to_history("画像解析", res)
                             except Exception as e:
                                 if "429" in str(e):
@@ -254,7 +254,7 @@ elif active_api_key:
 - (論文が主張している内容を日本語で詳細に解説)
 
 ### 💡 あなたの資料との「繋がり（考察への組み込み方）」
-- (ユーザーの資料に対して、どう結びつければ説得力が増すかを日本語で提案)
+- (ユーザーの資料に対して、どう結びつければ説得力が増すかを日本語で詳細に提案)
 
 ---
 【研究資料】
@@ -274,7 +274,7 @@ elif active_api_key:
                 if st.button("💬 質問する") and q:
                     with st.spinner("回答を生成中..."):
                         try:
-                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\n\n資料に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
+                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。\n\n資料に基づき質問に学術的かつ非常に詳細な長文で答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
                             st.markdown(res); add_to_history("Q&A", res)
                         except Exception as e:
                             if "429" in str(e):
@@ -348,7 +348,7 @@ elif active_api_key:
                                     prompt_a = f"""
 【絶対厳守】必ずすべて「日本語（Japanese）」で記述してください。
 
-以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
+以下の問題に対する【すべての正解と、論理的で極めて詳細な解説】を作成せよ。
 
 【問題】
 {res_q_clean}
