@@ -51,22 +51,16 @@ with st.sidebar:
     active_api_key = None
     
     if "ADMIN_API_KEY" in st.secrets:
-        # 【安全対策1】前後の見えない空白や改行を自動で削除
-        active_api_key = str(st.secrets["ADMIN_API_KEY"]).strip()
+        active_api_key = st.secrets["ADMIN_API_KEY"]
         st.success("🟢 AIサーバー接続済み (Pro稼働中)")
     else:
         st.warning("サーバーにAPIキーが設定されていません。")
         user_api_key = st.text_input("ご自身のGemini APIキーを入力してください", type="password")
         if user_api_key:
-            active_api_key = user_api_key.strip()
+            active_api_key = user_api_key
 
     selected_model_name = "gemini-3.0-flash" 
     if active_api_key:
-        # 【安全対策2】APIキーに全角文字や日本語が混ざっている場合は、クラッシュさせずに警告を出す
-        if not active_api_key.isascii():
-            st.error("🚨 【エラー】APIキーの中に「日本語」「全角スペース」または「全角クォーテーション (” や “)」が混ざっています。\n\nStreamlitの設定（Secrets）を開き、純粋な半角英数字のみに修正してください。")
-            st.stop() # ここで安全に処理を止める
-
         genai.configure(api_key=active_api_key, transport='rest')
         if not st.session_state.available_models:
             raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
