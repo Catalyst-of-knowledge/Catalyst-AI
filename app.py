@@ -76,7 +76,10 @@ with st.sidebar:
             genai.configure(api_key=active_api_key, transport='rest')
             if not st.session_state.available_models:
                 raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                advanced_models = [m for m in raw_models if not re.search(r'gemini-[12]\.', m)]
+                
+                # 【修正箇所】gemmaなどを完全に排除し、gemini-3系のみを厳格に抽出する
+                advanced_models = [m for m in raw_models if 'gemini-3' in m]
+                
                 if not advanced_models:
                     advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
                 st.session_state.available_models = advanced_models
@@ -87,9 +90,8 @@ with st.sidebar:
             st.error(f"🚨 API連携エラーが発生しました。詳細: {e}")
 
     st.markdown("---")
-    st.markdown("### 🌐 翻訳サポート")
-    st.info("専門用語などを確認したい場合はこちら👇")
-    st.markdown("👉 **[DeepL翻訳を開く](https://www.deepl.com/translator)**")
+    st.markdown("### 🌐 外部サポート")
+    st.markdown("👉 [DeepL翻訳を開く](https://www.deepl.com/translator)")
 
     st.markdown("---")
     if st.button(t["new_create_btn"], type="primary"):
@@ -182,7 +184,6 @@ elif active_api_key:
                 
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
                     with st.spinner("資料を解析・構造化しています..."):
-                        # AIの混乱を防ぐため、非常にシンプルで厳格な日本語の命令文に修正
                         prompt_sum = f"""
 【最重要命令】
 これから出力するテキストは、必ずすべて「日本語（Japanese）」で記述してください。
