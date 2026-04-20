@@ -50,18 +50,23 @@ with st.sidebar:
     
     active_api_key = None
     
-    # 【変更点】パスワード入力を廃止し、サーバーに設定したAPIキーを無条件で読み込む
     if "ADMIN_API_KEY" in st.secrets:
-        active_api_key = st.secrets["ADMIN_API_KEY"]
+        # 【安全対策1】前後の見えない空白や改行を自動で削除
+        active_api_key = str(st.secrets["ADMIN_API_KEY"]).strip()
         st.success("🟢 AIサーバー接続済み (Pro稼働中)")
     else:
         st.warning("サーバーにAPIキーが設定されていません。")
         user_api_key = st.text_input("ご自身のGemini APIキーを入力してください", type="password")
         if user_api_key:
-            active_api_key = user_api_key
+            active_api_key = user_api_key.strip()
 
     selected_model_name = "gemini-3.0-flash" 
     if active_api_key:
+        # 【安全対策2】APIキーに全角文字や日本語が混ざっている場合は、クラッシュさせずに警告を出す
+        if not active_api_key.isascii():
+            st.error("🚨 【エラー】APIキーの中に「日本語」「全角スペース」または「全角クォーテーション (” や “)」が混ざっています。\n\nStreamlitの設定（Secrets）を開き、純粋な半角英数字のみに修正してください。")
+            st.stop() # ここで安全に処理を止める
+
         genai.configure(api_key=active_api_key, transport='rest')
         if not st.session_state.available_models:
             raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
@@ -253,6 +258,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
 2. 架空のページ数や行数を捏造しないこと。
 3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
+4. 元の研究資料の言語に関わらず、結果は【必ずすべて日本語】で出力すること。
 
 【出力フォーマット】（以下の項目も日本語で出力すること）
 以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
