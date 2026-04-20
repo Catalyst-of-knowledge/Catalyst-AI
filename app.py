@@ -3,7 +3,6 @@ import os, warnings, random, re, time, streamlit as st
 import google.generativeai as genai
 import fitz  # PyMuPDF
 from PIL import Image
-import pandas as pd 
 
 warnings.simplefilter('ignore', FutureWarning)
 os.environ['GRPC_VERBOSITY'] = 'NONE'
@@ -40,24 +39,20 @@ def on_mode_change():
 
 # --- サイドバー・モード管理 ---
 with st.sidebar:
+    # 【変更点】データ可視化モードを選択肢から削除し、2つに絞りました
     app_mode = st.radio(
         t["sidebar_mode_label"], 
-        [t["mode_research"], t["mode_data"], t["mode_test"]],
+        [t["mode_research"], t["mode_test"]],
         on_change=on_mode_change
     )
 
     st.markdown("---")
     st.markdown("### 🔑 認証システム")
     
-    st.info("💡 **Proプラン (月額980円)**\n\n最上位AIモデル「Gemini Pro」による高度な論文解析・完全再現模試が使い放題になります。")
-    purchase_url = "https://buy.stripe.com/test_xxxxxx"
-    st.markdown(f"<a href='{purchase_url}' target='_blank'><button style='width:100%; border-radius:4px; background-color:#FF4B4B; color:white; border:none; padding:10px; font-weight:bold; cursor:pointer;'>💎 Proプランに登録する</button></a>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 11px; color: gray; text-align: center; margin-top: 5px;'>※パスワードの第三者への共有は利用規約違反となり、検知次第パスワードを無効化します。</p>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
+    # 【変更点】PROプランの案内と課金ボタンを削除しました
     active_api_key = None
     
-    user_pass = st.text_input("💎 Pro Pass (登録者専用)", type="password")
+    user_pass = st.text_input("💎 専用 Pass (登録者専用)", type="password")
     
     valid_passes = [
         "admin",               
@@ -66,11 +61,11 @@ with st.sidebar:
     ]
     
     if user_pass in valid_passes:
-        st.success("🔓 Pro版として認証されました")
+        st.success("🔓 認証されました")
         if "ADMIN_API_KEY" in st.secrets: active_api_key = st.secrets["ADMIN_API_KEY"]
     else:
         user_api_key = st.text_input(t["api_label"], type="password", key="user_input_key")
-        st.button("🔑 ご自身のAPIキーを適用 (完全無料)", use_container_width=True)
+        st.button("🔑 ご自身のAPIキーを適用", use_container_width=True)
         st.markdown(f"<div style='text-align: right; font-size: 12px;'>👉 <a href='https://aistudio.google.com/app/apikey' target='_blank'>APIキー取得手順</a></div>", unsafe_allow_html=True)
         active_api_key = user_api_key
 
@@ -120,40 +115,40 @@ if st.session_state.viewing_history:
         st.rerun()
 
 elif active_api_key:
-    if app_mode != t["mode_data"]:
-        st.subheader(t["header_upload"])
-        c1, c2 = st.columns(2)
-        with c1:
-            ufs = st.file_uploader(t["upload_pdf"], type="pdf", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}_{app_mode}")
-            current_files = [f.name for f in ufs] if ufs else []
-            
-            for name in list(st.session_state.pdf_texts.keys()):
-                if name not in current_files:
-                    del st.session_state.pdf_texts[name]
-                    if name in st.session_state.pdf_images: del st.session_state.pdf_images[name]
-                        
-            if ufs:
-                for f in ufs:
-                    if f.name not in st.session_state.pdf_texts:
-                        file_bytes = f.read()
-                        pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
-                        
-                        extracted_text = []
-                        for p_idx, page in enumerate(pdf_doc): 
-                            extracted_text.append(f"【ページ {p_idx + 1}】\n{page.get_text()}")
-                        st.session_state.pdf_texts[f.name] = "\n".join(extracted_text)
-                        
-                        images = []
-                        for i in range(min(3, len(pdf_doc))):
-                            page = pdf_doc.load_page(i)
-                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                            img.thumbnail((1024, 1024))
-                            images.append(img)
-                        st.session_state.pdf_images[f.name] = images
+    # 【変更点】データモードがなくなったため、アップロードエリアの条件分岐をスッキリさせました
+    st.subheader(t["header_upload"])
+    c1, c2 = st.columns(2)
+    with c1:
+        ufs = st.file_uploader(t["upload_pdf"], type="pdf", accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}_{app_mode}")
+        current_files = [f.name for f in ufs] if ufs else []
+        
+        for name in list(st.session_state.pdf_texts.keys()):
+            if name not in current_files:
+                del st.session_state.pdf_texts[name]
+                if name in st.session_state.pdf_images: del st.session_state.pdf_images[name]
+                    
+        if ufs:
+            for f in ufs:
+                if f.name not in st.session_state.pdf_texts:
+                    file_bytes = f.read()
+                    pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    
+                    extracted_text = []
+                    for p_idx, page in enumerate(pdf_doc): 
+                        extracted_text.append(f"【ページ {p_idx + 1}】\n{page.get_text()}")
+                    st.session_state.pdf_texts[f.name] = "\n".join(extracted_text)
+                    
+                    images = []
+                    for i in range(min(3, len(pdf_doc))):
+                        page = pdf_doc.load_page(i)
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        img.thumbnail((1024, 1024))
+                        images.append(img)
+                    st.session_state.pdf_images[f.name] = images
 
-        with c2:
-            u_img = st.file_uploader(t["upload_img"], type=["png", "jpg", "jpeg"], key=f"img_{st.session_state.uploader_key}_{app_mode}")
+    with c2:
+        u_img = st.file_uploader(t["upload_img"], type=["png", "jpg", "jpeg"], key=f"img_{st.session_state.uploader_key}_{app_mode}")
 
     # ==========================================
     # 🔬 1. 論文・資料解析
@@ -291,53 +286,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                         st.markdown(res); add_to_history("Q&A", res)
 
     # ==========================================
-    # 📊 2. データ可視化・分析
-    # ==========================================
-    elif app_mode == t["mode_data"]:
-        st.subheader(t["data_header"])
-        up_d = st.file_uploader(t["upload_data"], type=["xlsx", "csv", "xls"], key=f"data_{st.session_state.uploader_key}")
-        if up_d:
-            try:
-                if up_d.name.endswith('.xlsx') or up_d.name.endswith('.xls'):
-                    xls = pd.ExcelFile(up_d)
-                    sel_sheet = st.selectbox("📑 対象シートを選択", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
-                    df = pd.read_excel(up_d, sheet_name=sel_sheet)
-                else: df = pd.read_csv(up_d)
-
-                if not df.empty:
-                    df.columns = [str(c).replace(":", "：") for c in df.columns]
-                    c_r, c_c = st.columns(2)
-                    max_rows = len(df) if len(df) > 0 else 1
-                    with c_r: rows = st.slider(t["data_range_label"], 0, max_rows, (0, max_rows))
-                    with c_c: cols = st.multiselect("使用する列を選択", df.columns.tolist(), default=df.columns.tolist())
-                    
-                    if cols:
-                        df_sel = df.iloc[rows[0]:rows[1]][cols]
-                        st.dataframe(df_sel)
-                        st.markdown("---")
-                        v_col1, v_col2, v_col3 = st.columns(3)
-                        with v_col1: x_col = st.selectbox("X軸 (横軸)", cols)
-                        with v_col2: y_col = st.multiselect("Y軸 (縦軸)", [c for c in cols if c != x_col])
-                        with v_col3: chart_type = st.selectbox("グラフの種類", ["折れ線グラフ (Line)", "棒グラフ (Bar)", "散布図 (Scatter)"])
-                        
-                        if st.button("グラフを描画"):
-                            if y_col:
-                                chart_data = df_sel[[x_col] + y_col]
-                                if "Line" in chart_type: st.line_chart(chart_data, x=x_col, y=y_col)
-                                elif "Bar" in chart_type: st.bar_chart(chart_data, x=x_col, y=y_col)
-                                elif "Scatter" in chart_type: st.scatter_chart(chart_data, x=x_col, y=y_col)
-                        
-                        st.markdown("---")
-                        if st.button("AIでデータを分析"):
-                            with st.spinner("分析中..."):
-                                res = generate_content_with_retry(selected_model_name, None, f"以下のデータセットの傾向や相関関係をプロとして詳細に分析してください。\n\n{df_sel.describe().to_csv()}")
-                                st.markdown(res); add_to_history("データ分析", res)
-                else:
-                    st.warning("アップロードされたデータファイルが空です。")
-            except Exception as e: st.error(f"データ読み込みエラー: {e}")
-
-    # ==========================================
-    # 🎓 3. テスト対策
+    # 🎓 2. テスト対策
     # ==========================================
     elif app_mode == t["mode_test"]:
         st.info("💡 テスト対策モード: 資料（PDF・画像）からの問題作成、AI添削、解答生成、模試生成を一元管理します。")
