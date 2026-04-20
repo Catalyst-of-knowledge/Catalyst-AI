@@ -76,7 +76,7 @@ with st.sidebar:
             genai.configure(api_key=active_api_key, transport='rest')
             if not st.session_state.available_models:
                 raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                # 【重要】Gemmaモデルを完全に排除し、Gemini-3系のみを抽出
+                # Gemmaモデルを完全に排除し、Gemini-3系のみを抽出
                 advanced_models = [m for m in raw_models if 'gemini-3' in m and 'gemma' not in m.lower()]
                 if not advanced_models:
                     advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
@@ -183,7 +183,6 @@ elif active_api_key:
                 
                 if st.button("📝 構造化要約を実行", key="btn_sum", type="primary"):
                     with st.spinner("日本語で解析・構造化しています... (ページ数が多いと数十秒かかります)"):
-                        # 【完全日本語化プロンプト】英語や翻訳という言葉を一切排除
                         prompt_sum = f"""
 【絶対厳守の命令】
 あなたは日本の専門研究員です。以下の資料を精読し、指定された9つの見出しに沿って、極めて具体的かつ詳細な要約を作成してください。
