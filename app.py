@@ -163,7 +163,6 @@ elif active_api_key:
         if not st.session_state.pdf_texts and not u_img:
             st.warning("👆 上のエリアから資料をアップロードしてください。")
         else:
-            # 【バグ修正1】PDFと画像のデータを完全に統合し、エラーを防ぐ
             res_images = []
             if u_img:
                 img_obj = Image.open(u_img)
@@ -234,6 +233,7 @@ elif active_api_key:
 1. 前置きの挨拶、AIの自己紹介、「料理のレシピ」等の無関係な言葉は一切出力しないこと。
 2. 資料に「【ページ X】」という表記があっても、ページごとに分割して同じ要約を繰り返す（ループ処理）ことは絶対に禁止します。必ず「資料全体で1つの統合された要約」を作成すること。
 3. 要約だからといって短く省略せず、重要なデータ、数値、論理展開はすべて残すこと。
+4. 元の資料が英語や他の言語であっても、結果は【必ずすべて日本語】で出力すること。
 
 資料テキスト:
 {txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
@@ -246,7 +246,7 @@ elif active_api_key:
                         with st.spinner("画像解析中..."):
                             img = Image.open(u_img)
                             img.thumbnail((1024, 1024))
-                            res = generate_content_with_retry(selected_model_name, [img], "この画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
+                            res = generate_content_with_retry(selected_model_name, [img], "この画像から読み取れる科学的事実、データの傾向を詳細に解説してください。必ずすべて日本語で出力すること。")
                             st.markdown(res); add_to_history("画像解析", res)
             
             with rtab3:
@@ -260,6 +260,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 1. 誰もが検索して見つけられる、歴史的・基礎的、あるいはその分野で非常に有名な「確実に実在する文献」のみを提案すること。
 2. 架空のページ数や行数を捏造しないこと。
 3. ユーザーの資料内の文章を「外部文献の引用」としてそのままコピペ出力しないこと。
+4. 元の研究資料の言語に関わらず、結果は【必ずすべて日本語】で出力すること。
 
 【出力フォーマット】
 以下のブロックを1件の文献とし、3件分を繰り返し出力してください。挨拶や説明文は一切不要です。指定の項目名とフォーマットを厳守してください。
@@ -286,7 +287,7 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 q = st.text_input("資料に関する質問を入力してください：")
                 if st.button("💬 質問する") and q:
                     with st.spinner("回答を生成中..."):
-                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
+                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"資料（画像およびテキスト）に基づき質問に学術的に答えてください。元の資料の言語に関わらず【必ずすべて日本語】で出力してください。\n\n質問: {q}\n\n資料:\n{txt}")
                         st.markdown(res); add_to_history("Q&A", res)
 
     # ==========================================
@@ -306,7 +307,6 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 if not df.empty:
                     df.columns = [str(c).replace(":", "：") for c in df.columns]
                     c_r, c_c = st.columns(2)
-                    # 【バグ修正2】データが0件の場合のエラーを防ぐセーフティガード
                     max_rows = len(df) if len(df) > 0 else 1
                     with c_r: rows = st.slider(t["data_range_label"], 0, max_rows, (0, max_rows))
                     with c_c: cols = st.multiselect("使用する列を選択", df.columns.tolist(), default=df.columns.tolist())
@@ -330,7 +330,6 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                         st.markdown("---")
                         if st.button("AIでデータを分析"):
                             with st.spinner("分析中..."):
-                                # 【バグ修正2】クラッシュの原因となるto_markdownを廃止し、安全なto_csvに変更
                                 res = generate_content_with_retry(selected_model_name, None, f"以下のデータセットの傾向や相関関係をプロとして詳細に分析してください。\n\n{df_sel.describe().to_csv()}")
                                 st.markdown(res); add_to_history("データ分析", res)
                 else:
@@ -426,7 +425,6 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 u_text = st.text_area("テキスト回答エリア：", height=150)
                 u_img_ans = st.file_uploader("手書きノートを写真で提出：", type=["png", "jpg", "jpeg"], key="grading_img")
                 if st.button("AI採点官に提出する", type="primary"):
-                    # 【バグ修正3】空データ提出によるフリーズ（エラー）を防止するセーフティガード
                     if not u_text.strip() and not u_img_ans:
                         st.warning("⚠️ 採点を行うためには、テキスト入力欄に解答を入力するか、ノートの画像をアップロードしてください。")
                     else:
