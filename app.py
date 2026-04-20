@@ -49,9 +49,17 @@ with st.sidebar:
     st.markdown("### 🔑 システム稼働状況")
     
     active_api_key = None
+    has_secret_key = False
     
-    if "ADMIN_API_KEY" in st.secrets:
-        active_api_key = str(st.secrets["ADMIN_API_KEY"]).strip()
+    # 【最強の安全装置】Secretsの読み込みでエラーが起きても絶対にアプリを落とさない
+    try:
+        if "ADMIN_API_KEY" in st.secrets:
+            active_api_key = str(st.secrets["ADMIN_API_KEY"]).strip()
+            has_secret_key = True
+    except Exception:
+        pass # エラーが起きても無視して進む
+
+    if has_secret_key and active_api_key:
         st.success("🟢 AIサーバー接続済み (Pro稼働中)")
     else:
         st.warning("サーバーにAPIキーが設定されていません。")
@@ -62,19 +70,22 @@ with st.sidebar:
     selected_model_name = "gemini-3.0-flash" 
     if active_api_key:
         if not active_api_key.isascii():
-            st.error("🚨 【エラー】APIキーの中に「日本語」「全角スペース」または「全角クォーテーション (” や “)」が混ざっています。\n\nStreamlitの設定（Secrets）を開き、純粋な半角英数字のみに修正してください。")
+            st.error("🚨 【エラー】APIキーの中に「日本語」「全角スペース」または「全角クォーテーション」が混ざっています。修正してください。")
             st.stop()
 
-        genai.configure(api_key=active_api_key, transport='rest')
-        if not st.session_state.available_models:
-            raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            advanced_models = [m for m in raw_models if not re.search(r'gemini-[12]\.', m)]
-            if not advanced_models:
-                advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
-            st.session_state.available_models = advanced_models
-            
-        if st.session_state.available_models:
-            selected_model_name = st.selectbox(t["model_label"], st.session_state.available_models)
+        try:
+            genai.configure(api_key=active_api_key, transport='rest')
+            if not st.session_state.available_models:
+                raw_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                advanced_models = [m for m in raw_models if not re.search(r'gemini-[12]\.', m)]
+                if not advanced_models:
+                    advanced_models = ["models/gemini-3.1-pro", "models/gemini-3.0-pro", "models/gemini-3.0-flash"]
+                st.session_state.available_models = advanced_models
+                
+            if st.session_state.available_models:
+                selected_model_name = st.selectbox(t["model_label"], st.session_state.available_models)
+        except Exception as e:
+            st.error(f"🚨 API連携エラーが発生しました。APIキーが間違っている可能性があります。詳細: {e}")
 
     st.markdown("---")
     if st.button(t["new_create_btn"], type="primary"):
@@ -217,17 +228,23 @@ elif active_api_key:
 
 資料テキスト:
 {txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
-                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_sum)
-                        st.markdown(res); add_to_history(f"要約({mode})", res)
+                        try:
+                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_sum)
+                            st.markdown(res); add_to_history(f"要約({mode})", res)
+                        except Exception as e:
+                            st.error(f"AIの生成中にエラーが発生しました: {e}")
             
             with rtab2:
                 if u_img:
                     if st.button("🔍 画像単体を解析する"):
                         with st.spinner("画像解析中..."):
-                            img = Image.open(u_img)
-                            img.thumbnail((1024, 1024))
-                            res = generate_content_with_retry(selected_model_name, [img], "【重要：必ずすべて日本語(Japanese)で出力すること】\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
-                            st.markdown(res); add_to_history("画像解析", res)
+                            try:
+                                img = Image.open(u_img)
+                                img.thumbnail((1024, 1024))
+                                res = generate_content_with_retry(selected_model_name, [img], "【重要：必ずすべて日本語(Japanese)で出力すること】\nこの画像から読み取れる科学的事実、データの傾向を詳細に解説してください。")
+                                st.markdown(res); add_to_history("画像解析", res)
+                            except Exception as e:
+                                st.error(f"画像解析中にエラーが発生しました: {e}")
             
             with rtab3:
                 st.info("💡 あなたの資料（実験結果・データ）をベースに、レポートの「考察（Discussion）」を執筆・裏付けするために引用すべき、実在の専門学術論文を提案します。")
@@ -262,16 +279,21 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 ---
 【研究資料テキスト（画像が添付されている場合は画像も参照）】
 {txt if txt else '（テキストデータなし。添付の画像データを参照してください）'}"""
-                        
-                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_ref)
-                        st.markdown(res); add_to_history("実験考察用文献生成", res)
+                        try:
+                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, prompt_ref)
+                            st.markdown(res); add_to_history("実験考察用文献生成", res)
+                        except Exception as e:
+                            st.error(f"参考文献生成中にエラーが発生しました: {e}")
             
             with rtab4:
                 q = st.text_input("資料に関する質問を入力してください：")
                 if st.button("💬 質問する") and q:
                     with st.spinner("回答を生成中..."):
-                        res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【最重要：回答は必ずすべて日本語(Japanese)で行うこと】\n資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
-                        st.markdown(res); add_to_history("Q&A", res)
+                        try:
+                            res = generate_content_with_retry(selected_model_name, res_images if res_images else None, f"【最重要：回答は必ずすべて日本語(Japanese)で行うこと】\n資料（画像およびテキスト）に基づき質問に学術的に答えてください。\n\n質問: {q}\n\n資料:\n{txt}")
+                            st.markdown(res); add_to_history("Q&A", res)
+                        except Exception as e:
+                            st.error(f"回答生成中にエラーが発生しました: {e}")
 
     # ==========================================
     # 🎓 2. テスト対策
@@ -327,13 +349,13 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 2. 「問題に誤りがある可能性」「必ずしも成立しない」等のAI特有のメタ発言や逃げ口上は絶対禁止。必ず論理的に解ける完全な問題を作成すること。
 3. 指定された【対象レベル】の学習指導要領の範囲を厳守すること。arccos, arcsin等の逸脱した大学数学の範囲は絶対に使用しないこと。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^` や `*` などのプレーンテキスト表記は禁止。"""
-                        
-                        res_q = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_q)
-                        res_q_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_q).strip()
-                        
-                    if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
-                        with st.spinner("問題に対する『解答・解説』を生成中..."):
-                            prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
+                        try:
+                            res_q = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_q)
+                            res_q_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_q).strip()
+                            
+                            if "⚠️" not in res_q_clean and "Error" not in res_q_clean:
+                                with st.spinner("問題に対する『解答・解説』を生成中..."):
+                                    prompt_a = f"""以下の問題に対する【すべての正解と、論理的で質の高い解説】を作成せよ。
 【重要：解答および解説は必ずすべて日本語(Japanese)で記述すること】
 
 【作成された問題】
@@ -347,12 +369,14 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
 2. 「問題に誤りがある」「解けない可能性がある」といった逃げ口上は絶対禁止。必ず断定的なトーンで正解を導き出すこと。
 3. 指定された【対象レベル】の教育課程の範囲内で解説すること（逸脱した知識・逆三角関数等の使用は禁止）。
 4. 数式は必ずLaTeX形式（インラインは $数式$、ブロックは $$数式$$）を使用すること。`^`や`*`のプレーンテキスト表記は厳禁。"""
-                            
-                            res_a = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_a)
-                            res_a_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_a).strip()
-                            
-                        st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
-                        add_to_history(f"テスト作成 ({diff})", f"### 📝 問題編\n{res_q_clean}\n\n---\n### ✅ 模範解答と詳細解説\n{res_a_clean}")
+                                    
+                                    res_a = generate_content_with_retry(selected_model_name, image_payload if image_payload else None, prompt_a)
+                                    res_a_clean = re.sub(r'```[a-zA-Z]*\n|\n```|```', '', res_a).strip()
+                                    
+                                st.session_state.test_result_obj = {"q": res_q_clean, "a": res_a_clean}
+                                add_to_history(f"テスト作成 ({diff})", f"### 📝 問題編\n{res_q_clean}\n\n---\n### ✅ 模範解答と詳細解説\n{res_a_clean}")
+                        except Exception as e:
+                            st.error(f"問題作成中にエラーが発生しました: {e}")
             
             if st.session_state.test_result_obj:
                 st.markdown("### 📝 問題編")
@@ -368,14 +392,17 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                         st.warning("⚠️ 採点を行うためには、テキスト入力欄に解答を入力するか、ノートの画像をアップロードしてください。")
                     else:
                         with st.spinner("採点中..."):
-                            p_load = []
-                            if u_img_ans:
-                                ans_img = Image.open(u_img_ans)
-                                ans_img.thumbnail((1024, 1024))
-                                p_load.append(ans_img)
-                            p = f"【重要：必ずすべて日本語(Japanese)で出力すること】\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
-                            st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
-                            add_to_history("テスト採点", st.session_state.solve_feedback)
+                            try:
+                                p_load = []
+                                if u_img_ans:
+                                    ans_img = Image.open(u_img_ans)
+                                    ans_img.thumbnail((1024, 1024))
+                                    p_load.append(ans_img)
+                                p = f"【重要：必ずすべて日本語(Japanese)で出力すること】\n問題と模範解答を基準に、生徒の解答を採点・添削せよ。\n【問題】:\n{st.session_state.test_result_obj['q']}\n【模範解答】:\n{st.session_state.test_result_obj['a']}\n【生徒の解答】:\n{u_text if u_text else '画像参照'}"
+                                st.session_state.solve_feedback = generate_content_with_retry(selected_model_name, p_load if p_load else None, p)
+                                add_to_history("テスト採点", st.session_state.solve_feedback)
+                            except Exception as e:
+                                st.error(f"採点中にエラーが発生しました: {e}")
                 if st.session_state.solve_feedback: 
                     st.success("📊 添削・採点結果")
                     st.markdown(st.session_state.solve_feedback)
@@ -405,8 +432,8 @@ AI特有の「存在しない架空の論文」をでっち上げることは重
                 st.warning("⚠️ 【ベータ機能】アップロードされた資料（PDF/画像）の構造を解析し、全く同じ形式・難易度の別問題（模試）を生成します。")
                 t_level_mock = st.selectbox("模試を生成する対象レベル（学習指導要領）", t["test_levels"], key="mock_level")
                 if st.button("🔄 完全再現模試を生成する", type="primary"):
-                    engine = ExamEngine(selected_model_name, active_api_key, target_level=t_level_mock)
                     try:
+                        engine = ExamEngine(selected_model_name, active_api_key, target_level=t_level_mock)
                         with st.spinner("ステップ1: 資料の分量・難易度・形式を解析中..."):
                             blueprint = engine.analyze_material_structure(material_payload)
                             st.success(f"解析完了: 全{blueprint.total_q}問の構成を抽出しました。")
